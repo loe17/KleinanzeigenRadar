@@ -33,6 +33,10 @@ const TRANSLATIONS = {
     filter_pickup_only: "Nur Selbstabholung",
     filter_min_price: "Min €",
     filter_max_price: "Max €",
+    sort_newest: "Neueste zuerst",
+    sort_oldest: "Älteste zuerst",
+    sort_price_asc: "Preis: Niedrigster zuerst",
+    sort_price_desc: "Preis: Höchster zuerst",
 
     // Cards
     card_shipping: "Versand",
@@ -189,6 +193,10 @@ const TRANSLATIONS = {
     filter_pickup_only: "Pickup Only",
     filter_min_price: "Min €",
     filter_max_price: "Max €",
+    sort_newest: "Newest first",
+    sort_oldest: "Oldest first",
+    sort_price_asc: "Price: Lowest first",
+    sort_price_desc: "Price: Highest first",
 
     // Cards
     card_shipping: "Shipping",

@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-0.1.5-86b817.svg" alt="Version 0.1.5">
+  <img src="https://img.shields.io/badge/Version-0.1.6-86b817.svg" alt="Version 0.1.6">
   <img src="https://img.shields.io/badge/Domain-kleinanzeigenradar.local-purple.svg" alt="Local Domain">
   <img src="https://img.shields.io/badge/Sicherheit-HTTPS%20%7C%20SSL-green.svg" alt="HTTPS">
   <img src="https://img.shields.io/badge/Plattform-Linux%20%7C%20Docker-blue.svg" alt="Linux & Docker">
@@ -66,6 +66,9 @@ Normale Suchen auf Kleinanzeigen sind oft ungenau oder verpassen Schnäppchen, w
 * **Automatische Port-Erkennung:** Sollte ein Standardport (z. B. 8000 oder 8443) bereits durch andere Dienste belegt sein, sucht das System vollautomatisch den nächsten freien Port.
 * **Live-Treffer Vorschau beim Eintippen:** Während du Suchbegriffe, Preisbereiche oder Postleitzahlen eingibst, ermittelt das System in Sekundenschnelle die aktuelle Trefferanzahl direkt bei Kleinanzeigen und zeigt sie live an.
 * **Flexible Such- & Ausschlussbegriffe:** Kein starrer Hauptbegriff mehr. Du kannst beliebig viele Begriffe (z. B. `Dell Latitude`, `Lenovo T480`) hinterlegen und jeweils frei bestimmen, ob sie als aktiver Suchbegriff (grün) oder als Ausschlussbegriff (rot, z. B. `defekt`, `Bastler`) dienen.
+* **Präzise Trefferlogik (UND-Verknüpfung):** Sind mehrere Suchbegriffe definiert, müssen alle diese Begriffe irgendwo im Inserat (im Titel, der Beschreibung oder auf Fotos) vorkommen. Ausschlussbegriffe filtern unerwünschte Anzeigen zuverlässig heraus.
+* **Sortier- & Filteroptionen:** Die Trefferliste lässt sich per Klick nach Neueste, Älteste, Niedrigster Preis oder Höchster Preis sortieren.
+* **Sauberes Neuladen:** Beim Speichern oder manuellen Aktualisieren werden alte Treffer entfernt und direkt frisch vom Kleinanzeigen-Server abgerufen.
 * **Datums- & Zeitangaben:** Jeder Suchauftrag zeigt transparent und minutengenau an, wann er angelegt wurde (*Erstellt am*) und wann der Wächter zuletzt nach neuen Inseraten geschaut hat (*Zuletzt geprüft*).
 * **Zweisprachig (DE / EN):** Vollständig auf Deutsch und Englisch nutzbar – die Sprache lässt sich sauber im Menü „Einstellungen & Updates“ auswählen.
 * **Die Bild-Lupe (Foto-Texterkennung):** Viele Verkäufer schreiben kaum Text, stellen aber Fotos von Typenschildern, Seriennummern, Verpackungen oder Kassenbons ein. KleinanzeigenRadar liest Schriftzüge auf Fotos automatisch mit!
@@ -114,7 +117,7 @@ Das Skript stoppt alle Dienste oder Container sauber und fragt dich, ob deine bi
 ```text
 KleinanzeigenRadar/
 ├── app/
-│   ├── config.py           # Konfiguration, Pfade & Version 0.1.5
+│   ├── config.py           # Konfiguration, Pfade & Version 0.1.6
 │   ├── database.py         # Schnelle SQLite-Datenbank für Suchen & Treffer
 │   ├── network_utils.py    # Automatische Suche nach freien Ports & IPs
 │   ├── ssl_cert.py         # Automatische SSL-Zertifikatsgenerierung (HTTPS)

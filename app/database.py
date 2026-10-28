@@ -349,6 +349,7 @@ def get_results(
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
     search_term: Optional[str] = None,
+    sort_by: str = "newest",
     limit: int = 150
 ) -> List[Dict[str, Any]]:
     conn = get_db()
@@ -386,7 +387,17 @@ def get_results(
         like_term = f"%{search_term}%"
         params.extend([like_term, like_term, like_term])
 
-    query += " ORDER BY r.id DESC LIMIT ?"
+    # Sortier-Optionen
+    if sort_by == "price_asc":
+        query += " ORDER BY CASE WHEN r.price_num IS NULL THEN 1 ELSE 0 END, r.price_num ASC, r.id DESC"
+    elif sort_by == "price_desc":
+        query += " ORDER BY CASE WHEN r.price_num IS NULL THEN 1 ELSE 0 END, r.price_num DESC, r.id DESC"
+    elif sort_by == "oldest":
+        query += " ORDER BY r.id ASC"
+    else:  # newest (Standard)
+        query += " ORDER BY r.id DESC"
+
+    query += " LIMIT ?"
     params.append(limit)
 
     rows = conn.execute(query, params).fetchall()
@@ -401,6 +412,16 @@ def get_results(
             d["images"] = []
         results.append(d)
     return results
+
+def clear_results(search_id: Optional[int] = None):
+    """Löscht vorhandene Treffer (für einen bestimmten Suchauftrag oder komplett)."""
+    conn = get_db()
+    if search_id is not None:
+        conn.execute("DELETE FROM results WHERE search_id = ?", (search_id,))
+    else:
+        conn.execute("DELETE FROM results")
+    conn.commit()
+    conn.close()
 
 def update_result_status(result_id: int, status: str):
     conn = get_db()

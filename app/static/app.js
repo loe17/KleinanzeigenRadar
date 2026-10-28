@@ -134,6 +134,8 @@ function setupEventListeners() {
   // Filter-Bar
   document.getElementById("filter-search-input").addEventListener("input", debounce(filterResultsLocally, 250));
   document.getElementById("filter-shipping").addEventListener("change", () => loadResults());
+  const sortSelect = document.getElementById("filter-sort");
+  if (sortSelect) sortSelect.addEventListener("change", () => loadResults());
   document.getElementById("filter-min-price").addEventListener("input", debounce(() => loadResults(), 400));
   document.getElementById("filter-max-price").addEventListener("input", debounce(() => loadResults(), 400));
 
@@ -142,6 +144,12 @@ function setupEventListeners() {
   document.getElementById("btn-refresh-results").addEventListener("click", async () => {
     if (activeSearchId) {
       showToast(t("toast_search_triggered"), "info");
+      // Sofort vorhandene Treffer aus der Anzeige entfernen und Lade-Spinner anzeigen
+      allResults = [];
+      const container = document.getElementById("results-container");
+      if (container) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">${getSvgIcon('spinner', 32)}</div><p>${t('loading_results')}</p></div>`;
+      }
       try {
         await fetch(`/api/searches/${activeSearchId}/run`, { method: "POST" });
         pollForResults(activeSearchId);
@@ -275,6 +283,9 @@ async function loadResults(showSpinner = true) {
   const maxPrice = document.getElementById("filter-max-price").value;
   const searchTerm = document.getElementById("filter-search-input").value;
 
+  const sortEl = document.getElementById("filter-sort");
+  const sortBy = sortEl ? sortEl.value : "newest";
+
   const params = new URLSearchParams();
   if (activeSearchId) params.append("search_id", activeSearchId);
   if (activeStatus && activeStatus !== "all") params.append("status", activeStatus);
@@ -282,6 +293,7 @@ async function loadResults(showSpinner = true) {
   if (minPrice) params.append("min_price", minPrice);
   if (maxPrice) params.append("max_price", maxPrice);
   if (searchTerm) params.append("search_term", searchTerm);
+  if (sortBy) params.append("sort_by", sortBy);
 
   try {
     const res = await fetch(`/api/results?${params.toString()}`);
@@ -598,14 +610,12 @@ async function updateLiveCountPreview() {
   const typedVal = (document.getElementById("term-input") ? document.getElementById("term-input").value.trim() : "");
   const typedType = document.getElementById("term-type") ? document.getElementById("term-type").value : "include";
   
-  const includeTerms = currentTerms.filter(t => t.type === "include").map(t => t.text);
-  let queryForPreview = "";
-
-  if (typedVal && typedType === "include") {
-    queryForPreview = typedVal;
-  } else if (includeTerms.length > 0) {
-    queryForPreview = includeTerms[0];
+  const includeTerms = currentTerms.filter(t => t.type === "include").map(t => t.text.trim()).filter(Boolean);
+  let allIncludeWords = [...includeTerms];
+  if (typedVal && typedType === "include" && !allIncludeWords.some(w => w.toLowerCase() === typedVal.toLowerCase())) {
+    allIncludeWords.push(typedVal);
   }
+  const queryForPreview = allIncludeWords.join(" ");
 
   if (!queryForPreview) {
     box.className = "live-preview-box";
@@ -719,7 +729,7 @@ async function editSearch(event, id) {
 
 function pollForResults(searchId) {
   let attempts = 0;
-  const maxAttempts = 10;
+  const maxAttempts = 12;
   const interval = setInterval(async () => {
     attempts++;
     await loadSearches(false);
@@ -728,12 +738,24 @@ function pollForResults(searchId) {
     if (allResults.length > 0 || attempts >= maxAttempts) {
       clearInterval(interval);
     }
-  }, 1500);
+  }, 1200);
 }
 
 async function runSearchNow(event, id) {
   event.stopPropagation();
   showToast(t("toast_search_triggered"), "success");
+  if (activeSearchId === id) {
+    allResults = [];
+    const container = document.getElementById("results-container");
+    if (container) {
+      container.innerHTML = `
+        <div class="loading-state" style="padding: 40px; text-align: center; color: var(--text-muted);">
+          <div class="spinner"></div>
+          <p style="margin-top: 12px;">${t("live_count_loading") || "Lade aktuelle Treffer..."}</p>
+        </div>
+      `;
+    }
+  }
   try {
     await fetch(`/api/searches/${id}/run`, { method: "POST" });
     pollForResults(id);
@@ -819,6 +841,16 @@ async function handleSearchFormSubmit(e) {
     }
 
     closeModal("modal-search");
+    allResults = [];
+    const container = document.getElementById("results-container");
+    if (container) {
+      container.innerHTML = `
+        <div class="loading-state" style="padding: 40px; text-align: center; color: var(--text-muted);">
+          <div class="spinner"></div>
+          <p style="margin-top: 12px;">${t("live_count_loading") || "Lade aktuelle Treffer..."}</p>
+        </div>
+      `;
+    }
     await loadSearches();
     if (targetSearchId) {
       setNavFilter(null, parseInt(targetSearchId));

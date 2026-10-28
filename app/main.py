@@ -22,7 +22,8 @@ from app.database import (
     mark_all_results_as_read,
     get_stats,
     get_settings,
-    save_settings
+    save_settings,
+    clear_results
 )
 from app.scraper import fetch_live_result_count
 from app.watcher import watcher_service
@@ -145,7 +146,8 @@ async def api_update_search(search_id: int, data: SearchCreateUpdate, bg: Backgr
     if not search:
         raise HTTPException(status_code=404, detail="Suchauftrag nicht gefunden")
     update_search(search_id, data.model_dump())
-    # Direkt Suche im Hintergrund mit den neuen Kriterien ausführen
+    # Vorhandene Treffer entfernen und Suche mit neuen Kriterien sofort neu ausführen
+    clear_results(search_id)
     bg.add_task(watcher_service.execute_search_now, search_id)
     return {"success": True}
 
@@ -155,12 +157,14 @@ async def api_delete_search(search_id: int):
     return {"success": True}
 
 @app.post("/api/searches/{search_id}/run")
-async def api_run_search(search_id: int, bg: BackgroundTasks):
+async def api_run_search(search_id: int, bg: BackgroundTasks, clear_existing: bool = True):
     search = get_search(search_id)
     if not search:
         raise HTTPException(status_code=404, detail="Suchauftrag nicht gefunden")
+    if clear_existing:
+        clear_results(search_id)
     bg.add_task(watcher_service.execute_search_now, search_id)
-    return {"success": True, "message": "Suche im Hintergrund gestartet"}
+    return {"success": True, "message": "Treffer entfernt und Suche im Hintergrund gestartet"}
 
 # --- API: Ergebnisse ---
 
@@ -172,6 +176,7 @@ async def api_get_results(
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
     search_term: Optional[str] = None,
+    sort_by: Optional[str] = "newest",
     limit: int = 150
 ):
     return get_results(
@@ -181,6 +186,7 @@ async def api_get_results(
         min_price=min_price,
         max_price=max_price,
         search_term=search_term,
+        sort_by=sort_by or "newest",
         limit=limit
     )
 

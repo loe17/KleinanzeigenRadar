@@ -220,11 +220,8 @@ def matches_keywords(
         if target in title_check or target in desc_check or target in ocr_check:
             return False, f"Ausgeschlossen durch Kriterium: '{word}'"
 
-    # Pflichtbegriffe (falls vorhanden)
+    # Alle definierten Suchbegriffe müssen irgendwo vorkommen (in Titel, Beschreibung oder Bild-Text)
     match_locations = []
-    if matched_term:
-        match_locations.append(f"Suchbegriff '{matched_term}'")
-
     for word in include_words:
         target = word if case_sensitive else word.lower()
         if not target:
@@ -233,15 +230,14 @@ def matches_keywords(
         in_desc = target in desc_check if search_in_desc else False
         in_ocr = target in ocr_check
         if in_title or in_desc or in_ocr:
-            if in_title:
-                match_locations.append(f"Titel ('{word}')")
-            elif in_ocr:
-                match_locations.append(f"Bild-Text ('{word}')")
-            elif in_desc:
-                match_locations.append(f"Beschreibung ('{word}')")
+            locs = []
+            if in_title: locs.append("Titel")
+            if in_desc: locs.append("Beschreibung")
+            if in_ocr: locs.append("Bild-Text")
+            match_locations.append(f"{'/'.join(locs)} ('{word}')")
         else:
-            if not terms and not matched_term:
-                return False, f"Fehlendes Kriterium: '{word}'"
+            # Sobald auch nur EIN definierter Suchbegriff fehlt -> KEIN Treffer!
+            return False, f"Fehlender Suchbegriff: '{word}'"
 
     location_str = ", ".join(dict.fromkeys(match_locations))
     return True, f"Treffer in: {location_str}" if location_str else "Treffer durch Kriterien"
@@ -352,7 +348,20 @@ def scrape_search(search: Dict[str, Any]) -> List[Dict[str, Any]]:
     if not include_terms and search.get("query"):
         include_terms = [search["query"].strip()]
 
-    search_queries = include_terms if include_terms else [""]
+    search_queries = []
+    if include_terms:
+        # 1. Hauptabfrage mit allen Begriffen kombiniert (z. B. "Dell Latitude 3510")
+        combined = " ".join(include_terms)
+        search_queries.append(combined)
+
+        # 2. Wenn Foto-Texterkennung aktiv ist und mehrere Begriffe existieren,
+        #    auch die einzelnen Begriffe abfragen, falls ein Begriff nur auf dem Typenschild-Foto steht
+        if search.get("ocr_images") and len(include_terms) > 1:
+            for it in include_terms:
+                if it not in search_queries:
+                    search_queries.append(it)
+    else:
+        search_queries = [""]
     all_matched = {}
 
     for query_term in search_queries:
