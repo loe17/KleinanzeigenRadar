@@ -276,15 +276,27 @@
       </div>
       <div class="modal-body">
         
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <div style="font-size: 24px; font-weight: bold; color: var(--primary-hover);" id="detail-price"></div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: baseline; gap: 10px;">
+            <div style="font-size: 24px; font-weight: bold; color: var(--primary-hover);" id="detail-price"></div>
+            <div id="detail-price-reduction" style="display: none; background: rgba(34, 197, 94, 0.12); color: #15803d; padding: 4px 8px; border-radius: var(--radius-sm); font-size: 12.5px; font-weight: 600;"></div>
+          </div>
           <a id="detail-link" href="#" target="_blank" class="btn btn-primary btn-sm" style="text-decoration: none;">
             <span data-i18n="btn_open_kleinanzeigen">Auf Kleinanzeigen öffnen</span>
             <span class="icon-wrap" id="icon-detail-ext"></span>
           </a>
         </div>
 
-        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;" id="detail-location"></p>
+        <div style="display: flex; gap: 16px; font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; flex-wrap: wrap;">
+          <span id="detail-location"></span>
+          <span id="detail-online-duration"></span>
+        </div>
+
+        <!-- Preisverlauf falls vorhanden -->
+        <div id="detail-price-history-box" style="display: none; margin-bottom: 14px;">
+          <div class="form-label" data-i18n="lbl_price_history">Bisheriger Preisverlauf:</div>
+          <div id="detail-price-history-list" style="background: var(--bg-subtle); padding: 8px 12px; border-radius: var(--radius-md); font-size: 13px;"></div>
+        </div>
         
         <div class="result-match-reason" id="detail-match-reason" style="margin-bottom: 14px;"></div>
 
@@ -368,14 +380,42 @@
               <span class="icon-wrap" id="icon-cfg-email"></span>
               <span data-i18n="sec_email">E-Mail Benachrichtigungen (SMTP)</span>
             </h3>
+
+            <!-- Vorlagen Schnellauswahl -->
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label class="form-label" data-i18n="lbl_email_preset">E-Mail-Anbieter Vorlage (Schnellauswahl)</label>
+              <select class="form-control" id="cfg-email-preset" onchange="applyEmailPreset(this.value)">
+                <option value="custom" data-i18n="opt_preset_custom">Eigener Anbieter / Manuell konfigurieren</option>
+                <option value="netcup_465">Netcup (Port 465 SSL/TLS) - Empfohlen</option>
+                <option value="netcup_587">Netcup (Port 587 STARTTLS)</option>
+                <option value="gmail">Gmail / Google Mail (Port 587 STARTTLS)</option>
+                <option value="outlook">Outlook / Microsoft 365 (Port 587 STARTTLS)</option>
+                <option value="gmx">GMX (Port 587 STARTTLS)</option>
+                <option value="webde">WEB.DE (Port 587 STARTTLS)</option>
+                <option value="ionos">1&1 / IONOS (Port 465 SSL/TLS)</option>
+                <option value="strato">Strato (Port 465 SSL/TLS)</option>
+              </select>
+            </div>
+
             <div class="form-row">
               <div class="form-group" style="flex: 2;">
                 <label class="form-label" data-i18n="lbl_smtp_host">SMTP-Server (Host)</label>
-                <input type="text" class="form-control" id="cfg-email-host" placeholder="smtp.gmail.com oder mail.gmx.net">
+                <input type="text" class="form-control" id="cfg-email-host" placeholder="mxe81b.netcup.net oder smtp.gmail.com">
               </div>
               <div class="form-group" style="flex: 1;">
                 <label class="form-label" data-i18n="lbl_smtp_port">Port</label>
-                <input type="number" class="form-control" id="cfg-email-port" value="587">
+                <input type="number" class="form-control" id="cfg-email-port" value="465" onchange="handlePortChange(this.value)">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" data-i18n="lbl_smtp_encryption">Verschlüsselung</label>
+                <select class="form-control" id="cfg-email-encryption">
+                  <option value="ssl" data-i18n="opt_enc_ssl">SSL / TLS direkt (Standard für Port 465)</option>
+                  <option value="starttls" data-i18n="opt_enc_starttls">STARTTLS (Standard für Port 587)</option>
+                  <option value="none" data-i18n="opt_enc_none">Keine Verschlüsselung (Port 25)</option>
+                </select>
               </div>
             </div>
 
@@ -401,12 +441,9 @@
               </div>
             </div>
 
-            <label class="form-check" style="margin-top: 6px;">
-              <input type="checkbox" id="cfg-email-tls" checked>
-              <span data-i18n="chk_email_tls">TLS / STARTTLS Verschlüsselung verwenden (empfohlen)</span>
-            </label>
+            <div class="form-hint" style="margin-bottom: 10px;" data-i18n="hint_email_settings">Tipp: Nach Auswahl einer Vorlage können alle Felder frei angepasst oder mit deinen eigenen Serverdaten überschrieben werden.</div>
 
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-test-email" style="margin-top: 8px;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-test-email">
               <span class="icon-wrap" id="icon-test-email"></span>
               <span data-i18n="btn_test_email">Test-E-Mail senden</span>
             </button>

@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-0.1.7-86b817.svg" alt="Version 0.1.7">
+  <img src="https://img.shields.io/badge/Version-0.1.8-86b817.svg" alt="Version 0.1.8">
   <img src="https://img.shields.io/badge/Domain-kleinanzeigenradar.local-purple.svg" alt="Local Domain">
   <img src="https://img.shields.io/badge/Sicherheit-HTTPS%20%7C%20SSL-green.svg" alt="HTTPS">
   <img src="https://img.shields.io/badge/Plattform-Linux%20%7C%20Docker-blue.svg" alt="Linux & Docker">
@@ -64,6 +64,10 @@ Normale Suchen auf Kleinanzeigen sind oft ungenau oder verpassen Schnäppchen, w
 
 * **Lokale Domain & HTTPS:** Direkt im Heimnetzwerk unter `https://kleinanzeigenradar.local` mit automatisch generiertem SSL-Zertifikat erreichbar.
 * **Automatische Port-Erkennung:** Sollte ein Standardport (z. B. 8000 oder 8443) bereits durch andere Dienste belegt sein, sucht das System vollautomatisch den nächsten freien Port.
+* **Präzise Treffer-Aufschlüsselung:** Zeigt dir genau an, was wo gefunden wurde (z. B. `Titel ('Lenovo', 'T480') • Beschreibung: '16' (...16 GB RAM...)`), inklusive relevantem Textausschnitt.
+* **Vollständige Beschreibung & Fotogalerie per Klick:** Mit einem Klick auf die Anzeige öffnet sich sofort das Detailfenster mit der vollständigen Artikelbeschreibung und vergrößerbaren Originalfotos. Zusätzlich zeigt die Karte eine 2-zeilige Textvorschau.
+* **Online-Dauer & Preisverlauf:** Erkennt transparent, wie lange Inserate schon online sind (`vor 2 Std.`, `Heute, 14:23`) und dokumentiert Preissenkungen mit durchgestrichenem Altpreis und Ersparnis (`~~200 €~~ 160 € (-40 €)`). Im Detailfenster siehst du den gesamten Preisverlauf.
+* **E-Mail-Vorlagen & SSL/TLS-Unterstützung:** Vorkonfigurierte Vorlagen für Netcup (Port 465 SSL & Port 587 STARTTLS), Gmail, Outlook, GMX, WEB.DE, 1&1/IONOS und Strato. Volle Unterstützung für direktes SSL/TLS (Port 465) und STARTTLS (Port 587) mit klarer Fehlerdiagnose.
 * **Live-Treffer Vorschau beim Eintippen:** Während du Suchbegriffe, Preisbereiche oder Postleitzahlen eingibst, ermittelt das System in Sekundenschnelle die aktuelle Trefferanzahl direkt bei Kleinanzeigen und zeigt sie live an.
 * **Flexible Such- & Ausschlussbegriffe mit Sternchen-Joker (*):** Kein starrer Hauptbegriff mehr. Du kannst beliebig viele Begriffe (z. B. `Dell Latitude`, `Lenovo T480`) hinterlegen und frei bestimmen, ob sie als aktiver Suchbegriff (grün) oder Ausschlussbegriff (rot) dienen. Mit Sternchen wie `*15*` findest du Begriffe auch innerhalb von Wörtern (z. B. `15Zoll` oder `XPS15`), mit `15*` am Wortanfang oder mit `*defekt*`, um auch Teilwörter wie `Teildefekt` auszuschließen.
 * **Präzise Trefferlogik (UND-Verknüpfung):** Sind mehrere Suchbegriffe definiert, müssen alle diese Begriffe irgendwo im Inserat (im Titel, der Beschreibung oder auf Fotos) vorkommen. Ausschlussbegriffe filtern unerwünschte Anzeigen zuverlässig heraus.
@@ -87,8 +91,9 @@ Normale Suchen auf Kleinanzeigen sind oft ungenau oder verpassen Schnäppchen, w
    * Gib deinen **Bot-Token** (vom Telegram `@BotFather`) und deine **Chat-ID** ein.
    * Klicke auf **„Telegram-Testnachricht senden“**, um die Verbindung sofort zu testen.
 3. **E-Mail:**
-   * Trage deine E-Mail-Zugangsdaten (SMTP-Server, Port, Benutzername, Passwort) ein.
-   * Klicke auf **„Test-E-Mail senden“**.
+   * Wähle bei Bedarf eine **Vorlage** (z. B. *Netcup (Port 465 SSL/TLS)*, *Gmail*, *Outlook*, etc.) aus, um Serveradresse, Port und Verschlüsselung automatisch auszufüllen.
+   * Trage deine E-Mail-Zugangsdaten (Benutzername und Passwort / App-Passwort) sowie Absender- und Empfängeradresse ein.
+   * Klicke auf **„Test-E-Mail senden“**. Bei Fehlern gibt dir das System nun präzise Hinweise auf Deutsch.
 4. Klicke auf **„Einstellungen speichern“**. Fertig!
 
 ---
@@ -117,13 +122,13 @@ Das Skript stoppt alle Dienste oder Container sauber und fragt dich, ob deine bi
 ```text
 KleinanzeigenRadar/
 ├── app/
-│   ├── config.py           # Konfiguration, Pfade & Version 0.1.7
-│   ├── database.py         # Schnelle SQLite-Datenbank für Suchen & Treffer
+│   ├── config.py           # Konfiguration, Pfade & Version 0.1.8
+│   ├── database.py         # Schnelle SQLite-Datenbank, Preisverlauf & relative Zeit
 │   ├── network_utils.py    # Automatische Suche nach freien Ports & IPs
 │   ├── ssl_cert.py         # Automatische SSL-Zertifikatsgenerierung (HTTPS)
-│   ├── scraper.py          # Schonendes Kleinanzeigen-Scraping & Wortfilter
+│   ├── scraper.py          # Schonendes Scraping, Wortfilter & Trefferauszüge
 │   ├── ocr.py              # Foto-Texterkennung (Bild-Lupe)
-│   ├── notifier.py         # Telegram- & E-Mail-Benachrichtigungen
+│   ├── notifier.py         # Telegram- & E-Mail-Benachrichtigungen (SSL & STARTTLS)
 │   ├── updater.py          # GitHub-Versionsprüfung, Ladebalken & Auto-Restart
 │   ├── watcher.py          # Zuverlässiger Hintergrund-Wächter
 │   ├── static/             # CSS, JavaScript, i18n & SVG-Icons

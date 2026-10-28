@@ -1,4 +1,5 @@
 import sys
+import time
 import unittest
 from app.database import (
     init_db,
@@ -322,12 +323,80 @@ class TestKleinanzeigenRadar(unittest.TestCase):
         m7, _ = matches_keywords(search_wild_ex, "Dell Latitude", "Teildefekt fuer Bastler", "")
         self.assertFalse(m7)
 
+    def test_relative_time_formatting(self):
+        from app.database import format_relative_time
+        self.assertEqual(format_relative_time("Heute, 14:30"), "Heute, 14:30")
+        self.assertEqual(format_relative_time("Gestern, 09:15"), "Gestern, 09:15")
+        self.assertEqual(format_relative_time(""), "")
+
+    def test_price_history_and_reduction(self):
+        s_id = create_search({
+            "name": "Price Reduction Test",
+            "query": "Thinkpad",
+            "keywords": "T480",
+            "shipping_type": "all"
+        })
+        ad_key = f"test_price_drop_{time.time()}"
+        # 1. Erste Speicherung mit 200 €
+        r1_id = save_result({
+            "search_id": s_id,
+            "kleinanzeigen_id": ad_key,
+            "title": "Lenovo ThinkPad T480 Top",
+            "price": "200 €",
+            "price_num": 200.0,
+            "url": f"https://www.kleinanzeigen.de/s-anzeige/test/{ad_key}",
+            "published_date": "Heute, 10:00"
+        })
+        self.assertIsNotNone(r1_id)
+
+        # 2. Zweite Speicherung (Preissenkung auf 160 €)
+        r2_id = save_result({
+            "search_id": s_id,
+            "kleinanzeigen_id": ad_key,
+            "title": "Lenovo ThinkPad T480 Top",
+            "price": "160 €",
+            "price_num": 160.0,
+            "url": f"https://www.kleinanzeigen.de/s-anzeige/test/{ad_key}",
+            "published_date": "Heute, 10:00"
+        })
+        self.assertIsNone(r2_id)  # Duplikate liefern None zurück
+
+        # 3. Prüfe Ergebnisse über get_results
+        results = get_results(search_id=s_id)
+        self.assertEqual(len(results), 1)
+        r = results[0]
+        self.assertEqual(r["price"], "160 €")
+        self.assertTrue(r["price_reduced"])
+        self.assertEqual(r["old_price"], "200 €")
+        self.assertEqual(r["price_diff"], "-40 € (-20%)")
+        self.assertGreaterEqual(len(r["price_history"]), 2)
+        self.assertEqual(r["price_history"][0]["price_text"], "200 €")
+        self.assertEqual(r["price_history"][1]["price_text"], "160 €")
+
+        delete_search(s_id)
+
+    def test_match_reason_snippets(self):
+        search = {
+            "keywords": "Thinkpad, 16GB",
+            "case_sensitive": False,
+            "search_in_description": True
+        }
+        matched, reason = matches_keywords(
+            search,
+            title="Lenovo Thinkpad T480",
+            description="Ausstattung: Intel Core i5, 16GB RAM und 512GB SSD.",
+            ocr_text=""
+        )
+        self.assertTrue(matched)
+        self.assertIn("Titel ('Thinkpad')", reason)
+        self.assertIn("Beschreibung: '16GB'", reason)
+
     def test_updater_module(self):
         from app.config import VERSION
-        self.assertEqual(VERSION, "0.1.7")
+        self.assertEqual(VERSION, "0.1.8")
         update_info = check_for_github_update()
         self.assertIn("current_version", update_info)
-        self.assertEqual(update_info["current_version"], "0.1.7")
+        self.assertEqual(update_info["current_version"], "0.1.8")
 
 if __name__ == "__main__":
     unittest.main()

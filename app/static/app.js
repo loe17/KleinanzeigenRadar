@@ -384,27 +384,39 @@ function renderResultsGrid() {
       : `${getSvgIcon('mapPin', 12)} ${t('card_pickup')}`;
     const thumb = r.thumbnail_url || "/static/logo.svg";
 
+    const priceHtml = r.price_reduced
+      ? `<span style="text-decoration: line-through; opacity: 0.75; font-size: 11px; margin-right: 4px;">${escapeHtml(r.old_price)}</span>${escapeHtml(r.price)} <span style="font-size: 10px; background: rgba(34, 197, 94, 0.35); padding: 1px 4px; border-radius: 4px; font-weight: bold;">${escapeHtml(r.price_diff)}</span>`
+      : escapeHtml(r.price || 'VB');
+
     html += `
       <div class="result-card ${isNew ? 'is-new' : ''}" onclick="openDetailModal(${r.id})">
         <div class="result-image-box">
           <img class="result-image" src="${escapeHtml(thumb)}" alt="${escapeHtml(r.title)}" loading="lazy" onerror="this.src='/static/logo.svg'">
-          <div class="result-price-badge">${escapeHtml(r.price || 'VB')}</div>
+          <div class="result-price-badge">${priceHtml}</div>
           <div class="result-shipping-badge">${shippingBadge}</div>
         </div>
 
         <div class="result-card-body">
           <div class="result-tags">
             <span class="tag tag-highlight">${escapeHtml(r.search_name || 'Suche')}</span>
+            ${r.online_duration ? `<span class="tag" title="${t('lbl_online_since')}">${getSvgIcon('clock', 12)} ${escapeHtml(r.online_duration)}</span>` : ''}
+            ${r.price_reduced ? `<span class="tag" style="background: rgba(34, 197, 94, 0.15); color: #16a34a; border-color: rgba(34, 197, 94, 0.3); font-weight: 600;" title="${t('badge_reduced')}">${getSvgIcon('trendingDown', 12)} ${escapeHtml(r.price_diff)}</span>` : ''}
             ${r.ocr_text ? `<span class="tag" title="Text in Fotos gefunden">${getSvgIcon('camera', 12)} ${t('card_image_text')}</span>` : ''}
           </div>
 
-          <a href="${escapeHtml(r.url)}" target="_blank" class="result-title" onclick="event.stopPropagation()">
+          <div class="result-title" style="cursor: pointer;" onclick="openDetailModal(${r.id})">
             ${escapeHtml(r.title)}
-          </a>
+          </div>
 
           <div class="result-location">
             ${getSvgIcon('mapPin', 12)} ${escapeHtml(r.location || 'Deutschland')}
           </div>
+
+          ${r.description ? `
+            <div class="result-desc-snippet" style="font-size: 12px; color: var(--text-secondary); margin: 6px 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4; cursor: pointer;" onclick="openDetailModal(${r.id})">
+              ${escapeHtml(r.description)}
+            </div>
+          ` : ''}
 
           ${r.match_reason ? `<div class="result-match-reason">${getSvgIcon('lightbulb', 13)} ${escapeHtml(r.match_reason)}</div>` : ''}
 
@@ -478,6 +490,55 @@ function openDetailModal(resultId) {
   document.getElementById("detail-link").href = r.url;
   document.getElementById("detail-description").innerText = r.description || t("no_description");
 
+  // Online-Dauer
+  const durEl = document.getElementById("detail-online-duration");
+  if (durEl) {
+    if (r.online_duration) {
+      durEl.innerHTML = `${getSvgIcon('clock', 13)} ${t('lbl_online_since')}: ${escapeHtml(r.online_duration)}`;
+      durEl.style.display = "block";
+    } else {
+      durEl.style.display = "none";
+    }
+  }
+
+  // Preissenkung & Verlauf
+  const redEl = document.getElementById("detail-price-reduction");
+  if (redEl) {
+    if (r.price_reduced) {
+      redEl.innerHTML = `${getSvgIcon('trendingDown', 13)} ${t('badge_reduced')}: Vorher <s>${escapeHtml(r.old_price)}</s> (${escapeHtml(r.price_diff)})`;
+      redEl.style.display = "block";
+    } else {
+      redEl.style.display = "none";
+    }
+  }
+
+  const histBox = document.getElementById("detail-price-history-box");
+  const histList = document.getElementById("detail-price-history-list");
+  if (histBox && histList) {
+    let history = [];
+    try {
+      if (typeof r.price_history === "string") {
+        history = JSON.parse(r.price_history);
+      } else if (Array.isArray(r.price_history)) {
+        history = r.price_history;
+      }
+    } catch (e) {
+      history = [];
+    }
+    if (history && history.length > 1) {
+      histBox.style.display = "block";
+      histList.innerHTML = history.map(item => {
+        const d = item.date ? item.date.replace("T", " ") : "";
+        return `<div style="display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px dashed var(--border-color);">
+          <span>${escapeHtml(d)}</span>
+          <b>${escapeHtml(item.price)}</b>
+        </div>`;
+      }).join("");
+    } else {
+      histBox.style.display = "none";
+    }
+  }
+
   // Galerie
   const gallery = document.getElementById("detail-gallery");
   gallery.innerHTML = "";
@@ -500,6 +561,32 @@ function openDetailModal(resultId) {
     document.getElementById("detail-ocr-text").innerText = r.ocr_text;
   } else {
     ocrContainer.style.display = "none";
+  }
+
+  // Falls Beschreibung kurz oder leer ist, Details asynchron nachladen
+  if (!r.description || r.description.length < 50 || !r.images || r.images.length <= 1) {
+    fetch(`/api/results/${r.id}/details`)
+      .then(res => res.json())
+      .then(updated => {
+        if (updated && selectedResult && selectedResult.id === r.id) {
+          if (updated.description) {
+            document.getElementById("detail-description").innerText = updated.description;
+            r.description = updated.description;
+          }
+          if (updated.images && updated.images.length > 0) {
+            r.images = updated.images;
+            gallery.innerHTML = "";
+            updated.images.forEach(imgUrl => {
+              const img = document.createElement("img");
+              img.src = imgUrl;
+              img.loading = "lazy";
+              img.onclick = () => window.open(imgUrl, "_blank");
+              gallery.appendChild(img);
+            });
+          }
+        }
+      })
+      .catch(() => {});
   }
 
   openModal("modal-detail");
@@ -864,6 +951,58 @@ async function handleSearchFormSubmit(e) {
   }
 }
 
+function applyEmailPreset(presetKey) {
+  const hostEl = document.getElementById("cfg-email-host");
+  const portEl = document.getElementById("cfg-email-port");
+  const encEl = document.getElementById("cfg-email-encryption");
+
+  if (presetKey === "netcup_465") {
+    if (hostEl) hostEl.value = "mxe81b.netcup.net";
+    if (portEl) portEl.value = "465";
+    if (encEl) encEl.value = "ssl";
+  } else if (presetKey === "netcup_587") {
+    if (hostEl) hostEl.value = "mxe81b.netcup.net";
+    if (portEl) portEl.value = "587";
+    if (encEl) encEl.value = "starttls";
+  } else if (presetKey === "gmail") {
+    if (hostEl) hostEl.value = "smtp.gmail.com";
+    if (portEl) portEl.value = "587";
+    if (encEl) encEl.value = "starttls";
+  } else if (presetKey === "outlook") {
+    if (hostEl) hostEl.value = "smtp.office365.com";
+    if (portEl) portEl.value = "587";
+    if (encEl) encEl.value = "starttls";
+  } else if (presetKey === "gmx") {
+    if (hostEl) hostEl.value = "mail.gmx.net";
+    if (portEl) portEl.value = "587";
+    if (encEl) encEl.value = "starttls";
+  } else if (presetKey === "webde") {
+    if (hostEl) hostEl.value = "smtp.web.de";
+    if (portEl) portEl.value = "587";
+    if (encEl) encEl.value = "starttls";
+  } else if (presetKey === "ionos") {
+    if (hostEl) hostEl.value = "smtp.ionos.de";
+    if (portEl) portEl.value = "465";
+    if (encEl) encEl.value = "ssl";
+  } else if (presetKey === "strato") {
+    if (hostEl) hostEl.value = "smtp.strato.de";
+    if (portEl) portEl.value = "465";
+    if (encEl) encEl.value = "ssl";
+  }
+}
+
+function handlePortChange(port) {
+  const encEl = document.getElementById("cfg-email-encryption");
+  if (!encEl) return;
+  if (port == 465) {
+    encEl.value = "ssl";
+  } else if (port == 587) {
+    encEl.value = "starttls";
+  } else if (port == 25) {
+    encEl.value = "none";
+  }
+}
+
 // --- Einstellungen & Updater Modal ---
 
 async function openSettingsModal() {
@@ -874,14 +1013,53 @@ async function openSettingsModal() {
     document.getElementById("cfg-telegram-token").value = settings.telegram_bot_token || "";
     document.getElementById("cfg-telegram-chat-id").value = settings.telegram_chat_id || "";
     document.getElementById("cfg-email-host").value = settings.email_smtp_host || "";
-    document.getElementById("cfg-email-port").value = settings.email_smtp_port || "587";
+    document.getElementById("cfg-email-port").value = settings.email_smtp_port || "465";
     document.getElementById("cfg-email-user").value = settings.email_smtp_user || "";
     document.getElementById("cfg-email-password").value = "";
     document.getElementById("cfg-email-password").placeholder = settings.email_smtp_password_masked ? t("ph_password_unchanged") : "";
-    document.getElementById("cfg-email-tls").checked = settings.email_smtp_tls === "1" || settings.email_smtp_tls === true;
     document.getElementById("cfg-email-from").value = settings.email_from || "";
     document.getElementById("cfg-email-to").value = settings.email_to || "";
     document.getElementById("cfg-github-repo").value = settings.github_repo || "loe17/KleinanzeigenRadar";
+
+    // Verschlüsselungsauswahl setzen
+    const encEl = document.getElementById("cfg-email-encryption");
+    if (encEl) {
+      const tlsVal = String(settings.email_smtp_tls || "").toLowerCase();
+      const portVal = String(settings.email_smtp_port || "");
+      if (tlsVal === "ssl" || portVal === "465" || (tlsVal === "1" && portVal === "465")) {
+        encEl.value = "ssl";
+      } else if (tlsVal === "0" || tlsVal === "false" || tlsVal === "none") {
+        encEl.value = "none";
+      } else {
+        encEl.value = "starttls";
+      }
+    }
+
+    // Vorlage ermitteln
+    const presetEl = document.getElementById("cfg-email-preset");
+    if (presetEl) {
+      const host = (settings.email_smtp_host || "").toLowerCase();
+      const port = String(settings.email_smtp_port || "");
+      if (host.includes("netcup") && port === "465") {
+        presetEl.value = "netcup_465";
+      } else if (host.includes("netcup") && port === "587") {
+        presetEl.value = "netcup_587";
+      } else if (host.includes("gmail")) {
+        presetEl.value = "gmail";
+      } else if (host.includes("office365") || host.includes("outlook")) {
+        presetEl.value = "outlook";
+      } else if (host.includes("gmx")) {
+        presetEl.value = "gmx";
+      } else if (host.includes("web.de")) {
+        presetEl.value = "webde";
+      } else if (host.includes("ionos") || host.includes("1und1")) {
+        presetEl.value = "ionos";
+      } else if (host.includes("strato")) {
+        presetEl.value = "strato";
+      } else {
+        presetEl.value = "custom";
+      }
+    }
 
     const progressCard = document.getElementById("update-progress-card");
     if (progressCard) progressCard.style.display = "none";
@@ -901,13 +1079,16 @@ async function openSettingsModal() {
 
 async function handleSettingsFormSubmit(e) {
   e.preventDefault();
+  const encEl = document.getElementById("cfg-email-encryption");
+  const encVal = encEl ? encEl.value : "ssl";
+
   const payload = {
     telegram_bot_token: document.getElementById("cfg-telegram-token").value.trim(),
     telegram_chat_id: document.getElementById("cfg-telegram-chat-id").value.trim(),
     email_smtp_host: document.getElementById("cfg-email-host").value.trim(),
     email_smtp_port: document.getElementById("cfg-email-port").value.trim(),
     email_smtp_user: document.getElementById("cfg-email-user").value.trim(),
-    email_smtp_tls: document.getElementById("cfg-email-tls").checked ? "1" : "0",
+    email_smtp_tls: encVal,
     email_from: document.getElementById("cfg-email-from").value.trim(),
     email_to: document.getElementById("cfg-email-to").value.trim(),
     github_repo: document.getElementById("cfg-github-repo").value.trim()
@@ -954,11 +1135,14 @@ async function testTelegram() {
 }
 
 async function testEmail() {
+  const encEl = document.getElementById("cfg-email-encryption");
+  const encVal = encEl ? encEl.value : "ssl";
+
   const payload = {
     email_smtp_host: document.getElementById("cfg-email-host").value.trim(),
     email_smtp_port: document.getElementById("cfg-email-port").value.trim(),
     email_smtp_user: document.getElementById("cfg-email-user").value.trim(),
-    email_smtp_tls: document.getElementById("cfg-email-tls").checked ? "1" : "0",
+    email_smtp_tls: encVal,
     email_from: document.getElementById("cfg-email-from").value.trim(),
     email_to: document.getElementById("cfg-email-to").value.trim()
   };

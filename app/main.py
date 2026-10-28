@@ -23,9 +23,11 @@ from app.database import (
     get_stats,
     get_settings,
     save_settings,
-    clear_results
+    clear_results,
+    get_result_by_id,
+    update_result_details
 )
-from app.scraper import fetch_live_result_count
+from app.scraper import fetch_live_result_count, fetch_ad_details, DEFAULT_HEADERS
 from app.watcher import watcher_service
 from app.notifier import test_telegram_connection, test_email_connection
 from app.updater import check_for_github_update, perform_update, schedule_restart
@@ -201,6 +203,34 @@ async def api_set_result_status(result_id: int, data: StatusUpdate):
 async def api_mark_all_read(search_id: Optional[int] = None):
     mark_all_results_as_read(search_id)
     return {"success": True}
+
+@app.get("/api/results/{result_id}/details")
+async def api_get_result_details(result_id: int):
+    res = get_result_by_id(result_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Inserat nicht gefunden")
+
+    desc = res.get("description") or ""
+    images = res.get("images") or []
+    # Falls die Beschreibung noch unvollständig ist (< 100 Zeichen) oder Bilder fehlen, von Kleinanzeigen nachladen
+    if (len(desc) < 80 or len(images) <= 1) and res.get("url"):
+        try:
+            full_desc, new_images, pub_date = fetch_ad_details(res["url"], DEFAULT_HEADERS)
+            updated = False
+            if full_desc and len(full_desc) > len(desc):
+                desc = full_desc
+                updated = True
+            if new_images and len(new_images) > len(images):
+                images = new_images
+                updated = True
+            if updated:
+                update_result_details(result_id, desc, images)
+                res["description"] = desc
+                res["images"] = images
+        except Exception as e:
+            logger.warning(f"Konnte Details für Inserat {result_id} nicht nachladen: {e}")
+
+    return res
 
 # --- API: Einstellungen ---
 

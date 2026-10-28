@@ -9,7 +9,7 @@ DATA_DIR.mkdir(exist_ok=True, parents=True)
 DB_PATH = DATA_DIR / "radar.db"
 
 # Versions-Information
-VERSION = "0.1.7"
+VERSION = "0.1.8"
 APP_NAME = "KleinanzeigenRadar"
 GITHUB_REPO = "loe17/KleinanzeigenRadar"  # Standard-Repository auf GitHub
 

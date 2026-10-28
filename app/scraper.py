@@ -140,13 +140,13 @@ def parse_price(price_str: str) -> Optional[float]:
             return None
     return None
 
-def fetch_ad_details(ad_url: str, headers: Dict[str, str]) -> Tuple[str, List[str]]:
-    """Ruft die Detailseite einer Anzeige ab für vollständige Beschreibung und hochauflösende Bilder."""
+def fetch_ad_details(ad_url: str, headers: Dict[str, str]) -> Tuple[str, List[str], str]:
+    """Ruft die Detailseite einer Anzeige ab für vollständige Beschreibung, Galerie-Bilder und Datum."""
     try:
         time.sleep(random.uniform(0.1, 0.25))  # Kurze Pause
         resp = requests.get(ad_url, headers=headers, timeout=10)
         if resp.status_code != 200:
-            return "", []
+            return "", [], ""
 
         soup = BeautifulSoup(resp.text, "html.parser")
         
@@ -170,10 +170,18 @@ def fetch_ad_details(ad_url: str, headers: Dict[str, str]) -> Tuple[str, List[st
                 if src and src.startswith("http") and src not in image_urls:
                     image_urls.append(src)
 
-        return full_description, image_urls
+        # Veröffentlichungsdatum aus Detailansicht
+        published_date = ""
+        extra_info = soup.find(id="viewad-extra-info")
+        if extra_info:
+            date_span = extra_info.find("span")
+            if date_span:
+                published_date = date_span.get_text(strip=True)
+
+        return full_description, image_urls, published_date
     except Exception as e:
         logger.warning(f"Fehler beim Laden der Detailseite {ad_url}: {e}")
-        return "", []
+        return "", [], ""
 
 def compile_keyword_pattern(term: str, case_sensitive: bool = False) -> re.Pattern:
     """Wandelt einen Such- oder Ausschlussbegriff mit optionalen Wildcards (*, ?) in ein Regex um.
@@ -259,24 +267,46 @@ def matches_keywords(
             return False, f"Ausgeschlossen durch Kriterium: '{word}'"
 
     # Alle definierten Suchbegriffe müssen irgendwo vorkommen (in Titel, Beschreibung oder Bild-Text)
-    match_locations = []
+    title_matches = []
+    desc_matches = []
+    ocr_matches = []
+
     for word in include_words:
         rx = compile_keyword_pattern(word, case_sensitive)
         in_title = bool(rx.search(title_str))
         in_desc = bool(rx.search(desc_str)) if search_in_desc else False
         in_ocr = bool(rx.search(ocr_str))
 
-        if in_title or in_desc or in_ocr:
-            locs = []
-            if in_title: locs.append("Titel")
-            if in_desc: locs.append("Beschreibung")
-            if in_ocr: locs.append("Bild-Text")
-            match_locations.append(f"{'/'.join(locs)} ('{word}')")
-        else:
+        if not (in_title or in_desc or in_ocr):
             # Sobald auch nur EIN definierter Suchbegriff fehlt -> KEIN Treffer!
             return False, f"Fehlender Suchbegriff: '{word}'"
 
-    location_str = ", ".join(dict.fromkeys(match_locations))
+        if in_title:
+            title_matches.append(word)
+        elif in_desc:
+            m = rx.search(desc_str)
+            if m:
+                s_start = max(0, m.start() - 15)
+                s_end = min(len(desc_str), m.end() + 20)
+                snip = desc_str[s_start:s_end].replace("\n", " ").strip()
+                prefix_dot = "..." if s_start > 0 else ""
+                suffix_dot = "..." if s_end < len(desc_str) else ""
+                desc_matches.append(f"'{word}' ({prefix_dot}{snip}{suffix_dot})")
+            else:
+                desc_matches.append(f"'{word}'")
+        elif in_ocr:
+            ocr_matches.append(f"'{word}'")
+
+    sections = []
+    if title_matches:
+        terms_str = ", ".join(repr(w) for w in title_matches)
+        sections.append(f"Titel ({terms_str})")
+    if desc_matches:
+        sections.append(f"Beschreibung: {', '.join(desc_matches)}")
+    if ocr_matches:
+        sections.append(f"Bild-Text: {', '.join(ocr_matches)}")
+
+    location_str = " • ".join(sections)
     return True, f"Treffer in: {location_str}" if location_str else "Treffer durch Kriterien"
 
 def parse_articles_from_soup(soup: BeautifulSoup) -> List[Dict[str, Any]]:
@@ -359,6 +389,16 @@ def parse_articles_from_soup(soup: BeautifulSoup) -> List[Dict[str, Any]]:
                 if loc_elem:
                     location_str = loc_elem.get_text(separator=" ", strip=True)
 
+            # Datum der Anzeige ermitteln
+            published_date = ""
+            date_elem = item.select_one(".aditem-main--top--right")
+            if date_elem:
+                published_date = date_elem.get_text(strip=True)
+            if not published_date:
+                m_date = re.search(r"\b(Heute,\s*\d{1,2}:\d{2}|Gestern,\s*\d{1,2}:\d{2}|\d{1,2}\.\d{1,2}\.\d{2,4})\b", item.get_text())
+                if m_date:
+                    published_date = m_date.group(1).strip()
+
             results.append({
                 "adid": str(adid),
                 "title": title,
@@ -368,7 +408,8 @@ def parse_articles_from_soup(soup: BeautifulSoup) -> List[Dict[str, Any]]:
                 "location": location_str,
                 "thumbnail": thumbnail,
                 "url": full_url,
-                "description": short_desc
+                "description": short_desc,
+                "published_date": published_date
             })
         except Exception as e:
             logger.warning(f"Fehler beim Parsen eines Inserats: {e}")
@@ -471,13 +512,17 @@ def scrape_search(search: Dict[str, Any]) -> List[Dict[str, Any]]:
             if not is_match and "Ausgeschlossen" in reason:
                 continue
 
+            published_date = ad.get("published_date", "")
+
             # 3. Falls noch kein Treffer, aber Volltextsuche gewünscht ist -> Detailseite abrufen
             if not is_match and search.get("search_in_description") and ad["url"]:
-                detailed_desc, detailed_images = fetch_ad_details(ad["url"], DEFAULT_HEADERS)
+                detailed_desc, detailed_images, detailed_date = fetch_ad_details(ad["url"], DEFAULT_HEADERS)
                 if detailed_desc:
                     full_description = detailed_desc
                 if detailed_images:
                     all_images = detailed_images
+                if detailed_date:
+                    published_date = detailed_date
                 is_match, reason = matches_keywords(
                     search_criteria=search,
                     title=ad["title"],
@@ -515,7 +560,8 @@ def scrape_search(search: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "ocr_text": ocr_text,
                 "match_reason": reason,
                 "status": "new",
-                "search_name": search.get("name")
+                "search_name": search.get("name"),
+                "published_date": published_date
             }
 
         if len(search_queries) > 1:

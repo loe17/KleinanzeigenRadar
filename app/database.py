@@ -71,6 +71,14 @@ def init_db():
     );
     """)
 
+    # Prüfen, ob Spalten in results existieren (Migration)
+    cursor.execute("PRAGMA table_info(results)")
+    res_columns = [row[1] for row in cursor.fetchall()]
+    if "price_history" not in res_columns:
+        cursor.execute("ALTER TABLE results ADD COLUMN price_history TEXT DEFAULT '[]'")
+    if "published_date" not in res_columns:
+        cursor.execute("ALTER TABLE results ADD COLUMN published_date TEXT DEFAULT ''")
+
     # Tabelle für globale Einstellungen
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS settings (
@@ -299,20 +307,115 @@ def update_search_last_run(search_id: int):
     conn.commit()
     conn.close()
 
-# --- Hilfsfunktionen für Ergebnisse ---
+def format_relative_time(date_str: Optional[str]) -> str:
+    """Berechnet eine lesbare Zeitspanne wie 'vor 5 Min.', 'vor 2 Std.', 'vor 3 Tagen'."""
+    if not date_str:
+        return ""
+    clean_str = date_str.strip()
+    if "Heute" in clean_str or "Gestern" in clean_str:
+        return clean_str
+    try:
+        dt = datetime.fromisoformat(clean_str)
+    except Exception:
+        try:
+            dt = datetime.strptime(clean_str, "%d.%m.%Y")
+        except Exception:
+            return clean_str
+
+    now = datetime.now()
+    diff = now - dt
+    seconds = diff.total_seconds()
+    if seconds < 0:
+        return "gerade eben"
+    minutes = int(seconds // 60)
+    hours = int(minutes // 60)
+    days = int(hours // 24)
+
+    if minutes < 2:
+        return "gerade eben"
+    elif minutes < 60:
+        return f"vor {minutes} Min."
+    elif hours < 24:
+        return f"vor {hours} Std."
+    elif days == 1:
+        return "Gestern"
+    elif days < 30:
+        return f"vor {days} Tagen"
+    else:
+        return dt.strftime("%d.%m.%Y")
 
 def save_result(result_data: Dict[str, Any]) -> Optional[int]:
     conn = get_db()
     cursor = conn.cursor()
-    now = datetime.now().isoformat()
+    now_iso = datetime.now().isoformat()
+    now_fmt = datetime.now().strftime("%d.%m.%Y %H:%M")
+
+    # Prüfen, ob Inserat schon existiert
+    cursor.execute("""
+        SELECT id, price, price_num, price_history, published_date, description, images_json 
+        FROM results 
+        WHERE kleinanzeigen_id = ?
+    """, (result_data["kleinanzeigen_id"],))
+    existing = cursor.fetchone()
+
+    if existing:
+        res_id = existing["id"]
+        old_price = existing["price"]
+        old_price_num = existing["price_num"]
+        old_history_raw = existing["price_history"]
+        new_price = result_data.get("price", "")
+        new_price_num = result_data.get("price_num")
+
+        # Prüfen, ob sich der Preis geändert hat
+        if new_price_num is not None and old_price_num is not None and abs(new_price_num - old_price_num) > 0.01:
+            try:
+                history = json.loads(old_history_raw) if old_history_raw else []
+            except Exception:
+                history = []
+            if not history and old_price:
+                history.append({
+                    "date": existing["published_date"] or now_fmt,
+                    "price": old_price_num,
+                    "price_text": old_price
+                })
+            history.append({
+                "date": now_fmt,
+                "price": new_price_num,
+                "price_text": new_price
+            })
+            cursor.execute("""
+                UPDATE results 
+                SET price = ?, price_num = ?, price_history = ? 
+                WHERE id = ?
+            """, (new_price, new_price_num, json.dumps(history, ensure_ascii=False), res_id))
+            conn.commit()
+
+        # Beschreibung oder Bilder nachpflegen falls vorhanden
+        if (not existing["description"] or len(existing["description"]) < 50) and result_data.get("description"):
+            cursor.execute("UPDATE results SET description = ? WHERE id = ?", (result_data["description"], res_id))
+            conn.commit()
+
+        conn.close()
+        return None
+
+    # Neues Inserat anlegen
+    initial_history = []
+    if result_data.get("price_num") is not None:
+        initial_history.append({
+            "date": now_fmt,
+            "price": result_data["price_num"],
+            "price_text": result_data.get("price", "")
+        })
+
     try:
         cursor.execute("""
         INSERT INTO results (
             search_id, kleinanzeigen_id, title, price, price_num,
             location, distance, shipping_possible, url, thumbnail_url,
             images_json, description, ocr_text, match_reason,
-            status, notified_telegram, notified_email, found_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            status, notified_telegram, notified_email, found_at,
+            published_date, price_history
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             result_data["search_id"],
             result_data["kleinanzeigen_id"],
@@ -331,16 +434,44 @@ def save_result(result_data: Dict[str, Any]) -> Optional[int]:
             result_data.get("status", "new"),
             1 if result_data.get("notified_telegram") else 0,
             1 if result_data.get("notified_email") else 0,
-            now
+            now_iso,
+            result_data.get("published_date", ""),
+            json.dumps(initial_history, ensure_ascii=False)
         ))
         res_id = cursor.lastrowid
         conn.commit()
         return res_id
     except sqlite3.IntegrityError:
-        # Bereits in der Datenbank vorhanden
         return None
     finally:
         conn.close()
+
+def update_result_details(result_id: int, description: str, images: List[str], ocr_text: Optional[str] = None):
+    conn = get_db()
+    images_json = json.dumps(images or [])
+    if ocr_text:
+        conn.execute("UPDATE results SET description = ?, images_json = ?, ocr_text = ? WHERE id = ?", (description, images_json, ocr_text, result_id))
+    else:
+        conn.execute("UPDATE results SET description = ?, images_json = ? WHERE id = ?", (description, images_json, result_id))
+    conn.commit()
+    conn.close()
+
+def get_result_by_id(result_id: int) -> Optional[Dict[str, Any]]:
+    conn = get_db()
+    row = conn.execute("SELECT r.*, s.name as search_name FROM results r LEFT JOIN searches s ON r.search_id = s.id WHERE r.id = ?", (result_id,)).fetchone()
+    conn.close()
+    if not row:
+        return None
+    d = dict(row)
+    try:
+        d["images"] = json.loads(d.get("images_json") or "[]")
+    except Exception:
+        d["images"] = []
+    try:
+        d["price_history"] = json.loads(d.get("price_history") or "[]")
+    except Exception:
+        d["price_history"] = []
+    return d
 
 def get_results(
     search_id: Optional[int] = None,
@@ -410,6 +541,36 @@ def get_results(
             d["images"] = json.loads(d.get("images_json") or "[]")
         except:
             d["images"] = []
+
+        # Preisverlauf aufbereiten & Preisreduzierungen erkennen
+        try:
+            history = json.loads(d.get("price_history") or "[]")
+        except:
+            history = []
+        d["price_history"] = history
+
+        d["price_reduced"] = False
+        d["old_price"] = ""
+        d["price_diff"] = ""
+        if len(history) >= 2:
+            prev_entry = history[-2]
+            prev_p = prev_entry.get("price")
+            curr_p = d.get("price_num")
+            if prev_p is not None and curr_p is not None and curr_p < prev_p:
+                d["price_reduced"] = True
+                d["old_price"] = prev_entry.get("price_text") or f"{prev_p:.0f} €"
+                diff = prev_p - curr_p
+                percent = int(round((diff / prev_p) * 100)) if prev_p > 0 else 0
+                d["price_diff"] = f"-{diff:.0f} € (-{percent}%)"
+
+        # Online-Dauer berechnen
+        pub_date = d.get("published_date") or ""
+        if pub_date:
+            d["online_duration"] = format_relative_time(pub_date)
+        else:
+            d["online_duration"] = format_relative_time(d.get("found_at"))
+
+        d["found_at_formatted"] = format_datetime_str(d.get("found_at"))
         results.append(d)
     return results
 

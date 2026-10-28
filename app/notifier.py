@@ -1,9 +1,11 @@
 import smtplib
+import ssl
+import socket
 import logging
 import requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -89,18 +91,31 @@ def test_telegram_connection(bot_token: str, chat_id: str) -> Dict[str, Any]:
 
 # --- E-Mail Notifier ---
 
-def send_email_notification(smtp_settings: Dict[str, Any], item: Dict[str, Any]) -> bool:
-    """Sendet eine formatierte HTML-E-Mail über SMTP."""
-    host = smtp_settings.get("email_smtp_host")
-    port = int(smtp_settings.get("email_smtp_port", 587))
-    user = smtp_settings.get("email_smtp_user")
-    password = smtp_settings.get("email_smtp_password")
-    use_tls = smtp_settings.get("email_smtp_tls") in [1, "1", True, "true"]
-    from_addr = smtp_settings.get("email_from") or user
-    to_addr = smtp_settings.get("email_to")
+def _send_mail_internal(smtp_settings: Dict[str, Any], item: Dict[str, Any]) -> Tuple[bool, str]:
+    """Interne Hilfsfunktion: Versendet eine E-Mail und gibt Erfolg & Fehlermeldung zurück."""
+    host = (smtp_settings.get("email_smtp_host") or "").strip()
+    try:
+        port = int(smtp_settings.get("email_smtp_port", 587))
+    except (ValueError, TypeError):
+        port = 587
 
-    if not host or not to_addr:
-        return False
+    user = (smtp_settings.get("email_smtp_user") or "").strip()
+    password = smtp_settings.get("email_smtp_password") or ""
+    raw_tls = str(smtp_settings.get("email_smtp_tls", "")).lower()
+    use_tls = raw_tls in ["1", "true", "ssl", "starttls", "yes"]
+
+    # Port 465 erfordert direct SSL (SMTPS), Port 587 typischerweise STARTTLS
+    is_direct_ssl = port == 465 or raw_tls == "ssl"
+
+    from_addr = (smtp_settings.get("email_from") or user).strip()
+    to_addr = (smtp_settings.get("email_to") or "").strip()
+
+    if not host:
+        return False, "SMTP-Server (Host) ist nicht konfiguriert."
+    if not to_addr:
+        return False, "Empfänger-E-Mail-Adresse fehlt."
+    if not from_addr:
+        return False, "Absender-E-Mail-Adresse fehlt."
 
     title = item.get("title", "Neues Angebot")
     price = item.get("price", "K.A.")
@@ -155,31 +170,44 @@ def send_email_notification(smtp_settings: Dict[str, Any], item: Dict[str, Any])
     msg.attach(MIMEText(html_content, "html"))
 
     try:
-        server = smtplib.SMTP(host, port, timeout=10)
-        if use_tls:
-            server.starttls()
+        ctx = ssl.create_default_context()
+        if is_direct_ssl:
+            server = smtplib.SMTP_SSL(host, port, timeout=12, context=ctx)
+        else:
+            server = smtplib.SMTP(host, port, timeout=12)
+            if use_tls:
+                server.starttls(context=ctx)
+
         if user and password:
             server.login(user, password)
+
         server.sendmail(from_addr, [to_addr], msg.as_string())
         server.quit()
-        return True
+        return True, ""
+    except smtplib.SMTPAuthenticationError:
+        err = "Authentifizierung fehlgeschlagen: Benutzername oder Passwort ist inkorrekt."
+        logger.error(f"E-Mail-Fehler: {err}")
+        return False, err
+    except smtplib.SMTPServerDisconnected:
+        err = f"Verbindung wurde vom Server '{host}:{port}' unerwartet geschlossen. Bei Port 465 muss SSL/TLS aktiviert sein."
+        logger.error(f"E-Mail-Fehler: {err}")
+        return False, err
+    except (socket.timeout, TimeoutError):
+        err = f"Zeitüberschreitung (Timeout) beim Verbindungsaufbau zu '{host}:{port}'."
+        logger.error(f"E-Mail-Fehler: {err}")
+        return False, err
     except Exception as e:
+        err = f"SMTP-Fehler: {str(e)}"
         logger.error(f"Fehler beim Senden der E-Mail: {e}")
-        return False
+        return False, err
+
+def send_email_notification(smtp_settings: Dict[str, Any], item: Dict[str, Any]) -> bool:
+    """Sendet eine formatierte HTML-E-Mail über SMTP."""
+    ok, _ = _send_mail_internal(smtp_settings, item)
+    return ok
 
 def test_email_connection(smtp_settings: Dict[str, Any]) -> Dict[str, Any]:
-    """Testet die E-Mail-Einstellungen mit einer Test-Mail."""
-    host = smtp_settings.get("email_smtp_host")
-    port = int(smtp_settings.get("email_smtp_port", 587))
-    user = smtp_settings.get("email_smtp_user")
-    password = smtp_settings.get("email_smtp_password")
-    use_tls = smtp_settings.get("email_smtp_tls") in [1, "1", True, "true"]
-    from_addr = smtp_settings.get("email_from") or user
-    to_addr = smtp_settings.get("email_to")
-
-    if not host or not to_addr:
-        return {"success": False, "message": "SMTP-Server oder Empfänger-E-Mail fehlt."}
-
+    """Testet die E-Mail-Einstellungen mit einer Test-Mail und detaillierter Fehlermeldung."""
     test_item = {
         "title": "Verbindungstest erfolgreich",
         "price": "0,00 €",
@@ -190,11 +218,9 @@ def test_email_connection(smtp_settings: Dict[str, Any]) -> Dict[str, Any]:
         "url": "https://www.kleinanzeigen.de"
     }
 
-    try:
-        ok = send_email_notification(smtp_settings, test_item)
-        if ok:
-            return {"success": True, "message": f"Test-Mail erfolgreich an {to_addr} gesendet!"}
-        else:
-            return {"success": False, "message": "Senden fehlgeschlagen. Bitte Zugangsdaten und Port prüfen."}
-    except Exception as e:
-        return {"success": False, "message": f"SMTP-Fehler: {str(e)}"}
+    ok, error_msg = _send_mail_internal(smtp_settings, test_item)
+    if ok:
+        to_addr = smtp_settings.get("email_to")
+        return {"success": True, "message": f"Test-Mail erfolgreich an {to_addr} gesendet!"}
+    else:
+        return {"success": False, "message": f"Senden fehlgeschlagen: {error_msg}"}
