@@ -18,19 +18,19 @@ def send_telegram_notification(bot_token: str, chat_id: str, item: Dict[str, Any
     price = item.get("price", "K.A.")
     location = item.get("location", "Unbekannt")
     url = item.get("url", "")
-    shipping = "📦 Versand möglich" if item.get("shipping_possible") else "📍 Nur Abholung"
+    shipping = "Versand moeglich" if item.get("shipping_possible") else "Nur Abholung"
     search_name = item.get("search_name", "Suchauftrag")
     match_reason = item.get("match_reason", "Suchbegriff passt")
     thumbnail = item.get("thumbnail_url")
 
     caption = (
-        f"🎯 <b>Neuer KleinanzeigenRadar Treffer!</b>\n\n"
+        f"<b>[KleinanzeigenRadar] Neuer Treffer!</b>\n\n"
         f"<b>{title}</b>\n"
-        f"💰 <b>Preis:</b> {price}\n"
-        f"📍 <b>Ort / Versand:</b> {location} ({shipping})\n"
-        f"🔍 <b>Suchauftrag:</b> {search_name}\n"
-        f"💡 <b>Fundgrund:</b> {match_reason}\n\n"
-        f"🔗 <a href='{url}'>Direkt zur Anzeige öffnen</a>"
+        f"<b>Preis:</b> {price}\n"
+        f"<b>Ort / Versand:</b> {location} ({shipping})\n"
+        f"<b>Suchauftrag:</b> {search_name}\n"
+        f"<b>Fundgrund:</b> {match_reason}\n\n"
+        f"<a href='{url}'>Direkt zur Anzeige oeffnen &gt;&gt;</a>"
     )
 
     try:
@@ -67,9 +67,9 @@ def test_telegram_connection(bot_token: str, chat_id: str) -> Dict[str, Any]:
         return {"success": False, "message": "Bot-Token oder Chat-ID fehlt."}
 
     text = (
-        "🤖 <b>KleinanzeigenRadar Test</b>\n\n"
-        "Die Verbindung zu Telegram funktioniert erfolgreich!\n"
-        "Ab jetzt erhältst du hier Benachrichtigungen bei neuen Treffern."
+        "<b>[KleinanzeigenRadar] Verbindungstest</b>\n\n"
+        "Die Verbindung zu Telegram funktioniert einwandfrei!\n"
+        "Neue Treffer werden ab sofort hier gemeldet."
     )
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     try:
@@ -106,7 +106,7 @@ def send_email_notification(smtp_settings: Dict[str, Any], item: Dict[str, Any])
     price = item.get("price", "K.A.")
     location = item.get("location", "Unbekannt")
     url = item.get("url", "")
-    shipping = "Versand möglich" if item.get("shipping_possible") else "Nur Abholung"
+    shipping = "Versand moeglich" if item.get("shipping_possible") else "Nur Abholung"
     search_name = item.get("search_name", "Suchauftrag")
     match_reason = item.get("match_reason", "")
     thumbnail = item.get("thumbnail_url", "")
@@ -133,11 +133,11 @@ def send_email_notification(smtp_settings: Dict[str, Any], item: Dict[str, Any])
       <div class="card">
         <div class="header">KleinanzeigenRadar Treffer</div>
         <div class="content">
-          <span class="badge">🔍 {search_name}</span>
-          <span class="badge">💡 {match_reason}</span>
+          <span class="badge">Suche: {search_name}</span>
+          <span class="badge">Fundgrund: {match_reason}</span>
           <h2 style="margin-top: 12px; margin-bottom: 6px; color: #111827;">{title}</h2>
           <div class="price">{price}</div>
-          <p style="margin: 6px 0;">📍 <b>Standort:</b> {location} | <b>Versand:</b> {shipping}</p>
+          <p style="margin: 6px 0;"><b>Standort:</b> {location} | <b>Versand:</b> {shipping}</p>
           {"<img class='img' src='" + thumbnail + "'>" if thumbnail else ""}
           <div style="text-align: center;">
             <a href="{url}" class="button">Auf Kleinanzeigen ansehen</a>

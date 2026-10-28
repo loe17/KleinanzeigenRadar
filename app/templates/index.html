@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ app_name }} - Dein Kleinanzeigen-Wächter</title>
+  <title>{{ app_name }}</title>
   <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
   <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -11,7 +11,7 @@
 
   <div class="app-container">
     
-    <!-- Linke Seitenleiste (Notion-Stil) -->
+    <!-- Linke Seitenleiste -->
     <aside class="sidebar">
       <div class="brand">
         <img src="/static/logo.svg" alt="Logo" class="brand-logo">
@@ -21,43 +21,59 @@
         <span class="brand-badge">v{{ version }}</span>
       </div>
 
+      <!-- Sprachauswahl (DE / EN) -->
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 10px 10px 10px;">
+        <span style="font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; gap: 5px;">
+          <span id="globe-icon-container"></span>
+          <span data-i18n="language_label">Sprache / Language</span>
+        </span>
+        <div class="lang-switch-box">
+          <button type="button" class="lang-btn" id="lang-btn-de" onclick="changeLanguage('de')">DE</button>
+          <button type="button" class="lang-btn" id="lang-btn-en" onclick="changeLanguage('en')">EN</button>
+        </div>
+      </div>
+
       <!-- Hauptnavigation -->
-      <div class="nav-section-title">Übersicht</div>
+      <div class="nav-section-title" data-i18n="nav_overview">Übersicht</div>
+      
       <div class="nav-item active" id="nav-all">
-        <span>📬</span>
-        <span>Alle Treffer</span>
+        <span class="icon-wrap" id="icon-nav-all"></span>
+        <span data-i18n="nav_all">Alle Treffer</span>
         <span class="count" id="count-all">0</span>
       </div>
+      
       <div class="nav-item" id="nav-new">
-        <span>✨</span>
-        <span>Neu eingetroffen</span>
+        <span class="icon-wrap" id="icon-nav-new"></span>
+        <span data-i18n="nav_new">Neu eingetroffen</span>
         <span class="count" id="count-new">0</span>
       </div>
+      
       <div class="nav-item" id="nav-starred">
-        <span>⭐</span>
-        <span>Favoriten</span>
+        <span class="icon-wrap" id="icon-nav-starred"></span>
+        <span data-i18n="nav_starred">Favoriten</span>
         <span class="count" id="count-starred">0</span>
       </div>
+      
       <div class="nav-item" id="nav-dismissed">
-        <span>📁</span>
-        <span>Archiv / Ignoriert</span>
+        <span class="icon-wrap" id="icon-nav-dismissed"></span>
+        <span data-i18n="nav_dismissed">Archiv / Ignoriert</span>
       </div>
 
       <!-- Suchaufträge Sektion -->
       <div class="nav-section-title" style="margin-top: 14px;">
-        <span>Suchaufträge</span>
-        <button class="btn-icon-tiny" id="btn-add-search" title="Neuen Suchauftrag anlegen">＋</button>
+        <span data-i18n="nav_searches">Suchaufträge</span>
+        <button class="btn-icon-tiny" id="btn-add-search" title="Neuen Suchauftrag anlegen"></button>
       </div>
 
       <div class="searches-list" id="searches-list">
-        <!-- Wird dynamisch mit JavaScript befüllt -->
+        <!-- Dynamischer Inhalt -->
       </div>
 
       <!-- Seitenleisten-Fußbereich -->
       <div class="sidebar-footer">
         <div class="nav-item" id="btn-open-settings">
-          <span>⚙️</span>
-          <span>Einstellungen &amp; Updates</span>
+          <span class="icon-wrap" id="icon-nav-settings"></span>
+          <span data-i18n="nav_settings">Einstellungen &amp; Updates</span>
         </div>
       </div>
     </aside>
@@ -68,34 +84,39 @@
       <!-- Kopfbereich -->
       <header class="content-header">
         <div class="header-title-block">
-          <h1 id="header-title">Alle Treffer</h1>
-          <p id="header-desc">Übersicht über alle gefundenen Kleinanzeigen</p>
+          <h1 id="header-title" data-i18n="header_all_title">Alle Treffer</h1>
+          <p id="header-desc" data-i18n="header_all_desc">Übersicht über alle gefundenen Kleinanzeigen</p>
         </div>
 
         <div class="header-actions">
-          <button class="btn btn-secondary btn-sm" id="btn-mark-all-read" title="Alle sichtbaren Treffer als gelesen markieren">
-            ✓ Alle gelesen
+          <button class="btn btn-secondary btn-sm" id="btn-mark-all-read">
+            <span class="icon-wrap" id="icon-btn-check"></span>
+            <span data-i18n="btn_mark_all_read">Alle gelesen</span>
           </button>
-          <button class="btn btn-secondary btn-sm" id="btn-refresh-results" title="Trefferliste neu laden">
-            🔄 Aktualisieren
+          
+          <button class="btn btn-secondary btn-sm" id="btn-refresh-results">
+            <span class="icon-wrap" id="icon-btn-refresh"></span>
+            <span data-i18n="btn_refresh">Aktualisieren</span>
           </button>
+          
           <button class="btn btn-primary btn-sm" onclick="openSearchModal()">
-            ＋ Neuer Suchauftrag
+            <span class="icon-wrap" id="icon-btn-plus"></span>
+            <span data-i18n="btn_new_search">Neuer Suchauftrag</span>
           </button>
         </div>
       </header>
 
-      <!-- Filterleiste (Notion/Kaneo-Stil) -->
+      <!-- Filterleiste -->
       <div class="filter-bar">
         <div class="search-input-box">
-          <span class="search-input-icon">🔍</span>
+          <span class="search-input-icon" id="search-bar-icon"></span>
           <input type="text" id="filter-search-input" placeholder="Treffer durchsuchen (Titel, Text, Bild-Info)...">
         </div>
 
-        <select class="filter-select" id="filter-shipping" title="Versandfilter">
-          <option value="all">📦 Alle Angebote</option>
-          <option value="shipping_only">📦 Nur mit Versand</option>
-          <option value="pickup_only">📍 Nur Selbstabholung</option>
+        <select class="filter-select" id="filter-shipping">
+          <option value="all" data-i18n="filter_shipping_all">Alle Angebote</option>
+          <option value="shipping_only" data-i18n="filter_shipping_only">Nur mit Versand</option>
+          <option value="pickup_only" data-i18n="filter_pickup_only">Nur Selbstabholung</option>
         </select>
 
         <input type="number" class="filter-input-number" id="filter-min-price" placeholder="Min €" style="width: 85px;">
@@ -104,7 +125,7 @@
 
       <!-- Treffer-Raster -->
       <div class="results-container" id="results-container">
-        <!-- Wird dynamisch befüllt -->
+        <!-- Dynamischer Inhalt -->
       </div>
 
     </main>
@@ -114,8 +135,8 @@
   <div class="modal-overlay" id="modal-search">
     <div class="modal-box modal-box-large">
       <div class="modal-header">
-        <h2 id="search-modal-title">Neuen Suchauftrag anlegen</h2>
-        <button class="btn-icon-tiny" data-close-modal="modal-search" style="font-size: 16px;">✕</button>
+        <h2 id="search-modal-title" data-i18n="modal_search_new_title">Neuen Suchauftrag anlegen</h2>
+        <button class="btn-icon-tiny" data-close-modal="modal-search" id="btn-close-search-modal"></button>
       </div>
       <form id="search-form">
         <input type="hidden" id="search-id-input">
@@ -123,65 +144,65 @@
           
           <div class="form-row">
             <div class="form-group" style="flex: 2;">
-              <label class="form-label">Name des Suchauftrags *</label>
+              <label class="form-label" data-i18n="lbl_search_name">Name des Suchauftrags *</label>
               <input type="text" class="form-control" id="s-name" placeholder="z. B. MacBook Pro M1 16GB" required>
             </div>
             <div class="form-group" style="flex: 2;">
-              <label class="form-label">Suchbegriff auf Kleinanzeigen *</label>
+              <label class="form-label" data-i18n="lbl_search_query">Suchbegriff auf Kleinanzeigen *</label>
               <input type="text" class="form-control" id="s-query" placeholder="z. B. Macbook Pro" required>
-              <div class="form-hint">Der Hauptbegriff, mit dem Kleinanzeigen durchsucht wird.</div>
+              <div class="form-hint" data-i18n="hint_search_query">Der Hauptbegriff, mit dem Kleinanzeigen durchsucht wird.</div>
             </div>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Zusätzliche Pflicht- und Ausschlussbegriffe (optional)</label>
+            <label class="form-label" data-i18n="lbl_keywords">Zusätzliche Pflicht- und Ausschlussbegriffe (optional)</label>
             <textarea class="form-control" id="s-keywords" rows="2" placeholder="z. B. M1, 16GB, -defekt, -bastler"></textarea>
-            <div class="form-hint">Trenne Begriffe durch Kommas. Begriffe mit Minus (-) wie <code>-defekt</code> sortieren Angebote automatisch aus.</div>
+            <div class="form-hint" data-i18n="hint_keywords">Trenne Begriffe durch Kommas. Begriffe mit Minus (-) wie -defekt sortieren Angebote automatisch aus.</div>
           </div>
 
           <div class="form-row" style="background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px;">
             <label class="form-check" style="flex: 1;">
               <input type="checkbox" id="s-search-in-desc" checked>
-              <span>Auch Anzeigentext durchsuchen</span>
+              <span data-i18n="chk_search_in_desc">Auch Anzeigentext durchsuchen</span>
             </label>
             <label class="form-check" style="flex: 1;">
               <input type="checkbox" id="s-ocr-images" checked>
-              <span>Bilder analysieren (Texterkennung)</span>
+              <span data-i18n="chk_ocr_images">Bilder analysieren (Texterkennung)</span>
             </label>
             <label class="form-check" style="flex: 1;">
               <input type="checkbox" id="s-case-sensitive">
-              <span>Groß-/Kleinschreibung beachten</span>
+              <span data-i18n="chk_case_sensitive">Groß-/Kleinschreibung beachten</span>
             </label>
           </div>
 
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label">Mindestpreis (€)</label>
+              <label class="form-label" data-i18n="lbl_min_price">Mindestpreis (€)</label>
               <input type="number" class="form-control" id="s-min-price" placeholder="Beliebig">
             </div>
             <div class="form-group">
-              <label class="form-label">Maximalpreis (€)</label>
+              <label class="form-label" data-i18n="lbl_max_price">Maximalpreis (€)</label>
               <input type="number" class="form-control" id="s-max-price" placeholder="Beliebig">
             </div>
             <div class="form-group">
-              <label class="form-label">Versandoption</label>
+              <label class="form-label" data-i18n="lbl_shipping_option">Versandoption</label>
               <select class="form-control" id="s-shipping">
-                <option value="all">Egal (Versand &amp; Abholung)</option>
-                <option value="shipping_only">Nur Inserate mit Versand</option>
-                <option value="pickup_only">Nur Selbstabholung</option>
+                <option value="all" data-i18n="opt_shipping_any">Egal (Versand &amp; Abholung)</option>
+                <option value="shipping_only" data-i18n="opt_shipping_only">Nur Inserate mit Versand</option>
+                <option value="pickup_only" data-i18n="opt_pickup_only">Nur Selbstabholung</option>
               </select>
             </div>
           </div>
 
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label">Postleitzahl (optional)</label>
+              <label class="form-label" data-i18n="lbl_plz">Postleitzahl (optional)</label>
               <input type="text" class="form-control" id="s-plz" placeholder="z. B. 10115">
             </div>
             <div class="form-group">
-              <label class="form-label">Umkreis in km</label>
+              <label class="form-label" data-i18n="lbl_radius">Umkreis in km</label>
               <select class="form-control" id="s-radius">
-                <option value="0">Keine Beschränkung</option>
+                <option value="0" data-i18n="opt_radius_none">Keine Beschränkung</option>
                 <option value="5">5 km</option>
                 <option value="10">10 km</option>
                 <option value="20">20 km</option>
@@ -191,13 +212,13 @@
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label">Prüfintervall</label>
+              <label class="form-label" data-i18n="lbl_interval">Prüfintervall</label>
               <select class="form-control" id="s-interval">
-                <option value="5">Alle 5 Minuten</option>
-                <option value="10">Alle 10 Minuten</option>
-                <option value="15" selected>Alle 15 Minuten</option>
-                <option value="30">Alle 30 Minuten</option>
-                <option value="60">Jede Stunde</option>
+                <option value="5" data-i18n="opt_interval_5">Alle 5 Minuten</option>
+                <option value="10" data-i18n="opt_interval_10">Alle 10 Minuten</option>
+                <option value="15" selected data-i18n="opt_interval_15">Alle 15 Minuten</option>
+                <option value="30" data-i18n="opt_interval_30">Alle 30 Minuten</option>
+                <option value="60" data-i18n="opt_interval_60">Jede Stunde</option>
               </select>
             </div>
           </div>
@@ -205,22 +226,22 @@
           <div class="form-row" style="margin-top: 10px;">
             <label class="form-check" style="flex: 1;">
               <input type="checkbox" id="s-notify-telegram" checked>
-              <span>Telegram-Benachrichtigung</span>
+              <span data-i18n="chk_notify_telegram">Telegram-Benachrichtigung</span>
             </label>
             <label class="form-check" style="flex: 1;">
               <input type="checkbox" id="s-notify-email" checked>
-              <span>E-Mail-Benachrichtigung</span>
+              <span data-i18n="chk_notify_email">E-Mail-Benachrichtigung</span>
             </label>
             <label class="form-check" style="flex: 1;">
               <input type="checkbox" id="s-is-active" checked>
-              <span>Suchauftrag aktiv</span>
+              <span data-i18n="chk_search_active">Suchauftrag aktiv</span>
             </label>
           </div>
 
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-close-modal="modal-search">Abbrechen</button>
-          <button type="submit" class="btn btn-primary">Suchauftrag speichern</button>
+          <button type="button" class="btn btn-secondary" data-close-modal="modal-search" data-i18n="btn_cancel">Abbrechen</button>
+          <button type="submit" class="btn btn-primary" data-i18n="btn_save_search">Suchauftrag speichern</button>
         </div>
       </form>
     </div>
@@ -231,17 +252,18 @@
     <div class="modal-box modal-box-large">
       <div class="modal-header">
         <div style="flex: 1; overflow: hidden; padding-right: 12px;">
-          <h2 id="detail-title" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Detailansicht</h2>
+          <h2 id="detail-title" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" data-i18n="detail_header">Detailansicht</h2>
           <span style="font-size: 12px; color: var(--text-secondary);" id="detail-search-name"></span>
         </div>
-        <button class="btn-icon-tiny" data-close-modal="modal-detail" style="font-size: 16px;">✕</button>
+        <button class="btn-icon-tiny" data-close-modal="modal-detail" id="btn-close-detail-modal"></button>
       </div>
       <div class="modal-body">
         
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
           <div style="font-size: 24px; font-weight: bold; color: var(--primary-hover);" id="detail-price"></div>
           <a id="detail-link" href="#" target="_blank" class="btn btn-primary btn-sm" style="text-decoration: none;">
-            Auf Kleinanzeigen öffnen ↗
+            <span data-i18n="btn_open_kleinanzeigen">Auf Kleinanzeigen öffnen</span>
+            <span class="icon-wrap" id="icon-detail-ext"></span>
           </a>
         </div>
 
@@ -250,24 +272,24 @@
         <div class="result-match-reason" id="detail-match-reason" style="margin-bottom: 14px;"></div>
 
         <!-- Galerie -->
-        <div class="form-label">Bilder der Anzeige (Klicken zum Vergrößern):</div>
+        <div class="form-label" data-i18n="lbl_gallery">Bilder der Anzeige (Klicken zum Vergrößern):</div>
         <div class="gallery-grid" id="detail-gallery"></div>
 
         <!-- Erkannter Text in Fotos -->
         <div id="detail-ocr-box" style="margin-top: 16px; display: none;">
-          <div class="form-label">🔍 In den Fotos erkannter Text (Bild-Analyse):</div>
+          <div class="form-label" data-i18n="lbl_ocr">In den Fotos erkannter Text (Bild-Analyse):</div>
           <div class="ocr-box" id="detail-ocr-text"></div>
         </div>
 
         <!-- Volltext -->
         <div style="margin-top: 16px;">
-          <div class="form-label">Vollständige Beschreibung des Verkäufers:</div>
+          <div class="form-label" data-i18n="lbl_description">Vollständige Beschreibung des Verkäufers:</div>
           <div style="font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; background: var(--bg-subtle); padding: 14px; border-radius: var(--radius-md);" id="detail-description"></div>
         </div>
 
       </div>
       <div class="modal-footer">
-        <button class="btn btn-secondary" data-close-modal="modal-detail">Schließen</button>
+        <button class="btn btn-secondary" data-close-modal="modal-detail" data-i18n="btn_close">Schließen</button>
       </div>
     </div>
   </div>
@@ -276,27 +298,31 @@
   <div class="modal-overlay" id="modal-settings">
     <div class="modal-box modal-box-large">
       <div class="modal-header">
-        <h2>Einstellungen &amp; GitHub-Updates</h2>
-        <button class="btn-icon-tiny" data-close-modal="modal-settings" style="font-size: 16px;">✕</button>
+        <h2 data-i18n="modal_settings_title">Einstellungen &amp; GitHub-Updates</h2>
+        <button class="btn-icon-tiny" data-close-modal="modal-settings" id="btn-close-settings-modal"></button>
       </div>
       <form id="settings-form">
         <div class="modal-body">
           
           <!-- Telegram Bereich -->
           <div style="margin-bottom: 20px;">
-            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #0284c7;">💬 Telegram Benachrichtigungen</h3>
+            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #0284c7; display: flex; align-items: center; gap: 6px;">
+              <span class="icon-wrap" id="icon-cfg-telegram"></span>
+              <span data-i18n="sec_telegram">Telegram Benachrichtigungen</span>
+            </h3>
             <div class="form-row">
               <div class="form-group" style="flex: 2;">
-                <label class="form-label">Bot Token</label>
+                <label class="form-label" data-i18n="lbl_bot_token">Bot Token</label>
                 <input type="text" class="form-control" id="cfg-telegram-token" placeholder="z. B. 123456789:AAHfk...">
               </div>
               <div class="form-group" style="flex: 1;">
-                <label class="form-label">Chat-ID</label>
+                <label class="form-label" data-i18n="lbl_chat_id">Chat-ID</label>
                 <input type="text" class="form-control" id="cfg-telegram-chat-id" placeholder="z. B. 987654321">
               </div>
             </div>
             <button type="button" class="btn btn-secondary btn-sm" id="btn-test-telegram">
-              🔔 Telegram-Testnachricht senden
+              <span class="icon-wrap" id="icon-test-telegram"></span>
+              <span data-i18n="btn_test_telegram">Telegram-Testnachricht senden</span>
             </button>
           </div>
 
@@ -304,47 +330,51 @@
 
           <!-- E-Mail SMTP Bereich -->
           <div style="margin-bottom: 20px;">
-            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #059669;">✉️ E-Mail Benachrichtigungen (SMTP)</h3>
+            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #059669; display: flex; align-items: center; gap: 6px;">
+              <span class="icon-wrap" id="icon-cfg-email"></span>
+              <span data-i18n="sec_email">E-Mail Benachrichtigungen (SMTP)</span>
+            </h3>
             <div class="form-row">
               <div class="form-group" style="flex: 2;">
-                <label class="form-label">SMTP-Server (Host)</label>
+                <label class="form-label" data-i18n="lbl_smtp_host">SMTP-Server (Host)</label>
                 <input type="text" class="form-control" id="cfg-email-host" placeholder="smtp.gmail.com oder mail.gmx.net">
               </div>
               <div class="form-group" style="flex: 1;">
-                <label class="form-label">Port</label>
+                <label class="form-label" data-i18n="lbl_smtp_port">Port</label>
                 <input type="number" class="form-control" id="cfg-email-port" value="587">
               </div>
             </div>
 
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label">Benutzername</label>
+                <label class="form-label" data-i18n="lbl_smtp_user">Benutzername</label>
                 <input type="text" class="form-control" id="cfg-email-user" placeholder="deine-mail@example.com">
               </div>
               <div class="form-group">
-                <label class="form-label">Passwort / App-Passwort</label>
+                <label class="form-label" data-i18n="lbl_smtp_password">Passwort / App-Passwort</label>
                 <input type="password" class="form-control" id="cfg-email-password">
               </div>
             </div>
 
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label">Absender-Adresse</label>
+                <label class="form-label" data-i18n="lbl_email_from">Absender-Adresse</label>
                 <input type="email" class="form-control" id="cfg-email-from" placeholder="radar@deinedomain.de">
               </div>
               <div class="form-group">
-                <label class="form-label">Empfänger-Adresse</label>
+                <label class="form-label" data-i18n="lbl_email_to">Empfänger-Adresse</label>
                 <input type="email" class="form-control" id="cfg-email-to" placeholder="ziel-mail@example.com">
               </div>
             </div>
 
             <label class="form-check" style="margin-top: 6px;">
               <input type="checkbox" id="cfg-email-tls" checked>
-              <span>TLS / STARTTLS Verschlüsselung verwenden (empfohlen)</span>
+              <span data-i18n="chk_email_tls">TLS / STARTTLS Verschlüsselung verwenden (empfohlen)</span>
             </label>
 
             <button type="button" class="btn btn-secondary btn-sm" id="btn-test-email" style="margin-top: 8px;">
-              ✉️ Test-E-Mail senden
+              <span class="icon-wrap" id="icon-test-email"></span>
+              <span data-i18n="btn_test_email">Test-E-Mail senden</span>
             </button>
           </div>
 
@@ -352,23 +382,28 @@
 
           <!-- GitHub Updater Bereich -->
           <div>
-            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #4b5563;">🐙 GitHub &amp; Interner Updater</h3>
+            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #4b5563; display: flex; align-items: center; gap: 6px;">
+              <span class="icon-wrap" id="icon-cfg-github"></span>
+              <span data-i18n="sec_github">GitHub &amp; Interner Updater</span>
+            </h3>
             <div class="form-group">
-              <label class="form-label">GitHub Repository</label>
+              <label class="form-label" data-i18n="lbl_github_repo">GitHub Repository</label>
               <input type="text" class="form-control" id="cfg-github-repo" value="loe17/KleinanzeigenRadar">
-              <div class="form-hint">Format: <code>Nutzername/Repository</code> auf GitHub.</div>
+              <div class="form-hint" data-i18n="hint_github_repo">Format: <code>Nutzername/Repository</code> auf GitHub.</div>
             </div>
 
             <div style="background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-md); margin-top: 10px;">
               <div style="font-size: 13px; margin-bottom: 8px;" id="update-status-msg">
-                Installierte Version: <b>v{{ version }}</b>
+                <span data-i18n="installed_version">Installierte Version:</span> <b>v{{ version }}</b>
               </div>
               <div style="display: flex; gap: 8px;">
                 <button type="button" class="btn btn-secondary btn-sm" id="btn-check-update">
-                  🔍 Auf Updates prüfen
+                  <span class="icon-wrap" id="icon-check-update"></span>
+                  <span data-i18n="btn_check_update">Auf Updates prüfen</span>
                 </button>
                 <button type="button" class="btn btn-primary btn-sm" id="btn-perform-update" style="display: none;">
-                  ⬇️ Jetzt aktualisieren
+                  <span class="icon-wrap" id="icon-perform-update"></span>
+                  <span data-i18n="btn_perform_update">Jetzt aktualisieren</span>
                 </button>
               </div>
             </div>
@@ -376,8 +411,8 @@
 
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-close-modal="modal-settings">Abbrechen</button>
-          <button type="submit" class="btn btn-primary">Einstellungen speichern</button>
+          <button type="button" class="btn btn-secondary" data-close-modal="modal-settings" data-i18n="btn_cancel">Abbrechen</button>
+          <button type="submit" class="btn btn-primary" data-i18n="btn_save_settings">Einstellungen speichern</button>
         </div>
       </form>
     </div>
@@ -386,6 +421,9 @@
   <!-- Toast Container -->
   <div class="toast-container" id="toast-container"></div>
 
+  <!-- Skripte -->
+  <script src="/static/icons.js"></script>
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

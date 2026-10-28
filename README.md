@@ -1,4 +1,4 @@
-# 🎯 KleinanzeigenRadar
+# KleinanzeigenRadar
 
 <p align="center">
   <img src="docs/images/logo.jpg" width="140" height="140" alt="KleinanzeigenRadar Logo" style="border-radius: 20px;">
@@ -10,19 +10,19 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-1.0.0-86b817.svg" alt="Version 1.0.0">
+  <img src="https://img.shields.io/badge/Version-0.1.2-86b817.svg" alt="Version 0.1.2">
   <img src="https://img.shields.io/badge/Plattform-Linux%20%7C%20Docker-blue.svg" alt="Linux & Docker">
   <img src="https://img.shields.io/badge/Architektur-x86__64%20%7C%20ARM64%20%7C%20ARMv7-orange.svg" alt="x86 & ARM">
-  <img src="https://img.shields.io/badge/Design-Notion%20%2F%20Kaneo-24292e.svg" alt="Notion & Kaneo Style">
+  <img src="https://img.shields.io/badge/Sprachen-Deutsch%20%7C%20English-darkgreen.svg" alt="Languages">
   <img src="https://img.shields.io/badge/Telegram-Benachrichtigung-0088cc.svg" alt="Telegram Support">
 </p>
 
 ---
 
-## 📸 Einblicke in die Anwendung
+## Einblicke in die Anwendung
 
-### Das Dashboard im Notion- & Kaneo-Design
-Schlicht, fokussiert und ohne Ablenkung. Alle Treffer laufen zentral ein und lassen sich blitzschnell nach Status, Versandart oder Preisspanne filtern:
+### Das Dashboard
+Schlicht, fokussiert und ohne Ablenkung mit gestochen scharfen SVG-Grafiken und zweisprachiger Benutzeroberfläche (Deutsch & Englisch). Alle Treffer laufen zentral ein und lassen sich blitzschnell nach Status, Versandart oder Preisspanne filtern:
 
 <p align="center">
   <img src="docs/images/dashboard_preview.jpg" width="100%" alt="KleinanzeigenRadar Dashboard Vorschau" style="border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12);">
@@ -39,20 +39,22 @@ Sobald ein passendes Angebot online geht, erhältst du sofort eine Benachrichtig
 
 ---
 
-## ✨ Was kann KleinanzeigenRadar für dich tun?
+## Was kann KleinanzeigenRadar für dich tun?
 
 Normale Suchen auf Kleinanzeigen sind oft ungenau oder verpassen Schnäppchen, weil Verkäufer wichtige Details im Text vergessen oder Tippfehler machen. **KleinanzeigenRadar** findet diese Angebote trotzdem:
 
-* 🔍 **Gezielte Suchaufträge:** Lege beliebig viele Suchen an. Du entscheidest, ob exakt auf Groß-/Kleinschreibung geachtet werden soll und ob die gesamte Artikelbeschreibung durchsucht wird.
-* 📷 **Die Bild-Lupe (Foto-Texterkennung):** Viele Verkäufer schreiben kaum Text, stellen aber Fotos von Typenschildern, Seriennummern, Verpackungen oder Kassenbons ein. KleinanzeigenRadar liest Schriftzüge auf Fotos automatisch mit!
-* 📦 **Versand & Entfernung:** Bestimme pro Suche, ob du nur Angebote mit Versand suchst, nur Selbstabholung in deiner Nähe (z. B. 20 km um deine PLZ) oder beides.
-* 💰 **Preisspanne:** Setze flexibel Mindest- und Höchstpreise fest.
-* 💬 **Sofort-Meldung via Telegram & E-Mail:** Kein ständiges manuelles Nachschauen mehr – dein Handy meldet sich sofort, wenn etwas Passendes eingestellt wird.
-* 🔄 **Automatischer 1-Klick-Aktualisierer:** Prüft auf Knopfdruck über GitHub auf neue Versionen und aktualisiert sich auf Wunsch selbstständig.
+* **Zweisprachig (DE / EN):** Vollständig auf Deutsch und Englisch nutzbar – Standard ist Deutsch, per Klick sofort umschaltbar.
+* **Gezielte Suchaufträge:** Lege beliebig viele Suchen an. Du entscheidest, ob exakt auf Groß-/Kleinschreibung geachtet werden soll und ob die gesamte Artikelbeschreibung durchsucht wird.
+* **Die Bild-Lupe (Foto-Texterkennung):** Viele Verkäufer schreiben kaum Text, stellen aber Fotos von Typenschildern, Seriennummern, Verpackungen oder Kassenbons ein. KleinanzeigenRadar liest Schriftzüge auf Fotos automatisch mit!
+* **Versand & Entfernung:** Bestimme pro Suche, ob du nur Angebote mit Versand suchst, nur Selbstabholung in deiner Nähe (z. B. 20 km um deine PLZ) oder beides.
+* **Preisspanne:** Setze flexibel Mindest- und Höchstpreise fest.
+* **Sofort-Meldung via Telegram & E-Mail:** Kein ständiges manuelles Nachschauen mehr – dein Handy meldet sich sofort, wenn etwas Passendes eingestellt wird.
+* **SVG-Grafiken statt Emojis:** Alle Oberflächenelemente basieren auf sauberen, hochauflösenden Vektorgrafiken.
+* **Automatischer 1-Klick-Aktualisierer:** Prüft auf Knopfdruck über GitHub auf neue Versionen und aktualisiert sich auf Wunsch selbstständig.
 
 ---
 
-## 🚀 Schnellanleitung: Installation (In unter 2 Minuten)
+## Schnellanleitung: Installation (In unter 2 Minuten)
 
 Das mitgelieferte Installationsskript prüft dein System vollautomatisch und richtet alles schlüsselfertig ein.
 
@@ -82,27 +84,27 @@ Nach der Installation siehst du die fertige Adresse im Terminal (z. B. `http://d
 
 ---
 
-## ⚙️ Telegram & E-Mail einrichten
+## Telegram & E-Mail einrichten
 
-1. Klicke in der Web-Oberfläche unten links auf **„⚙️ Einstellungen & Updates“**.
+1. Klicke in der Web-Oberfläche unten links auf **„Einstellungen & Updates“**.
 2. **Telegram:**
    * Gib deinen **Bot-Token** (vom Telegram `@BotFather`) und deine **Chat-ID** ein.
-   * Klicke auf **„🔔 Telegram-Testnachricht senden“**, um die Verbindung sofort zu testen.
+   * Klicke auf **„Telegram-Testnachricht senden“**, um die Verbindung sofort zu testen.
 3. **E-Mail:**
    * Trage deine E-Mail-Zugangsdaten (SMTP-Server, Port, Benutzername, Passwort) ein.
-   * Klicke auf **„✉️ Test-E-Mail senden“**.
+   * Klicke auf **„Test-E-Mail senden“**.
 4. Klicke auf **„Einstellungen speichern“**. Fertig!
 
 ---
 
-## 🔄 Updates über GitHub
+## Updates über GitHub
 
-* In der Web-Oberfläche unter **„⚙️ Einstellungen & Updates“** kannst du jederzeit auf **„🔍 Auf Updates prüfen“** klicken.
-* Gibt es eine neue Version, klickst du auf **„⬇️ Jetzt aktualisieren“** – die Anwendung holt sich die aktuellen Daten direkt von GitHub.
+* In der Web-Oberfläche unter **„Einstellungen & Updates“** kannst du jederzeit auf **„Auf Updates prüfen“** klicken.
+* Gibt es eine neue Version, klickst du auf **„Jetzt aktualisieren“** – die Anwendung holt sich die aktuellen Daten direkt von GitHub.
 
 ---
 
-## 🗑️ Deinstallation
+## Deinstallation
 
 Möchtest du die Anwendung irgendwann entfernen, genügt ein einziger Befehl:
 
@@ -114,19 +116,19 @@ Das Skript stoppt alle Dienste oder Container sauber und fragt dich, ob deine bi
 
 ---
 
-## 📁 Ordner-Struktur
+## Ordner-Struktur
 
 ```text
 KleinanzeigenRadar/
 ├── app/
-│   ├── config.py           # Konfiguration, Pfade & Version
+│   ├── config.py           # Konfiguration, Pfade & Version 0.1.2
 │   ├── database.py         # Schnelle SQLite-Datenbank für Suchen & Treffer
 │   ├── scraper.py          # Schonendes Kleinanzeigen-Scraping & Wortfilter
 │   ├── ocr.py              # Foto-Texterkennung (Bild-Lupe)
 │   ├── notifier.py         # Telegram- & E-Mail-Benachrichtigungen
 │   ├── updater.py          # GitHub-Versionsprüfung & 1-Klick-Aktualisierer
 │   ├── watcher.py          # Zuverlässiger Hintergrund-Wächter
-│   ├── static/             # Notion/Kaneo CSS, JavaScript & Vektor-Logo
+│   ├── static/             # CSS, JavaScript, i18n & SVG-Icons
 │   └── templates/          # Haupt-HTML-Oberfläche
 ├── data/                   # Gespeicherte Suchen & Treffer (bleibt bei Updates erhalten)
 ├── docs/images/            # Vorschaubilder für die Dokumentation
@@ -142,5 +144,5 @@ KleinanzeigenRadar/
 ---
 
 <p align="center">
-  Entwickelt für eine entspannte, automatische Schnäppchenjagd auf Kleinanzeigen. 🎯
+  Entwickelt für eine entspannte, automatische Schnäppchenjagd auf Kleinanzeigen.
 </p>

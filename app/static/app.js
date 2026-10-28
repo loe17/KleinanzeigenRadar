@@ -1,4 +1,4 @@
-// KleinanzeigenRadar - Modernes Frontend im Notion / Kaneo Stil
+// KleinanzeigenRadar - Modernes Frontend mit SVG-Icons & Mehrsprachigkeit (DE/EN)
 
 let activeSearchId = null;
 let activeStatus = "all";
@@ -8,14 +8,89 @@ let selectedResult = null;
 
 // DOM Geladen
 document.addEventListener("DOMContentLoaded", () => {
+  initIcons();
+  updateStaticTranslations();
   initApp();
   setupEventListeners();
+
   // Regelmäßige Aktualisierung der Statistiken und Treffer alle 30 Sekunden
   setInterval(() => {
     loadSearches(false);
     loadResults(false);
   }, 30000);
 });
+
+// --- Statische SVG-Icons im DOM initialisieren ---
+
+function initIcons() {
+  document.getElementById("globe-icon-container").innerHTML = getSvgIcon("globe", 13);
+  document.getElementById("icon-nav-all").innerHTML = getSvgIcon("inbox", 15);
+  document.getElementById("icon-nav-new").innerHTML = getSvgIcon("sparkles", 15);
+  document.getElementById("icon-nav-starred").innerHTML = getSvgIcon("star", 15);
+  document.getElementById("icon-nav-dismissed").innerHTML = getSvgIcon("archive", 15);
+  document.getElementById("btn-add-search").innerHTML = getSvgIcon("plus", 14);
+  document.getElementById("icon-nav-settings").innerHTML = getSvgIcon("settings", 15);
+  document.getElementById("icon-btn-check").innerHTML = getSvgIcon("check", 14);
+  document.getElementById("icon-btn-refresh").innerHTML = getSvgIcon("refresh", 14);
+  document.getElementById("icon-btn-plus").innerHTML = getSvgIcon("plus", 14);
+  document.getElementById("search-bar-icon").innerHTML = getSvgIcon("search", 14);
+  document.getElementById("btn-close-search-modal").innerHTML = getSvgIcon("x", 16);
+  document.getElementById("btn-close-detail-modal").innerHTML = getSvgIcon("x", 16);
+  document.getElementById("btn-close-settings-modal").innerHTML = getSvgIcon("x", 16);
+  document.getElementById("icon-detail-ext").innerHTML = getSvgIcon("externalLink", 13);
+  document.getElementById("icon-cfg-telegram").innerHTML = getSvgIcon("telegram", 16);
+  document.getElementById("icon-test-telegram").innerHTML = getSvgIcon("bell", 14);
+  document.getElementById("icon-cfg-email").innerHTML = getSvgIcon("mail", 16);
+  document.getElementById("icon-test-email").innerHTML = getSvgIcon("mail", 14);
+  document.getElementById("icon-cfg-github").innerHTML = getSvgIcon("github", 16);
+  document.getElementById("icon-check-update").innerHTML = getSvgIcon("search", 14);
+  document.getElementById("icon-perform-update").innerHTML = getSvgIcon("download", 14);
+}
+
+// --- Sprachwechsel & Übersetzungsaktualisierung ---
+
+function changeLanguage(lang) {
+  setLanguage(lang);
+  updateStaticTranslations();
+  renderSearchesList();
+  renderResultsGrid();
+  loadStats();
+}
+
+function updateStaticTranslations() {
+  // Aktiven Button hervorheben
+  document.getElementById("lang-btn-de").classList.toggle("active", currentLang === "de");
+  document.getElementById("lang-btn-en").classList.toggle("active", currentLang === "en");
+
+  // Alle Elemente mit data-i18n Attribut übersetzen
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const key = el.getAttribute("data-i18n");
+    if (key) {
+      el.innerText = t(key);
+    }
+  });
+
+  // Platzhalter übersetzen
+  document.getElementById("filter-search-input").placeholder = t("filter_search_placeholder");
+  document.getElementById("filter-min-price").placeholder = t("filter_min_price");
+  document.getElementById("filter-max-price").placeholder = t("filter_max_price");
+  document.getElementById("s-name").placeholder = t("ph_search_name");
+  document.getElementById("s-query").placeholder = t("ph_search_query");
+  document.getElementById("s-keywords").placeholder = t("ph_keywords");
+  document.getElementById("s-min-price").placeholder = t("ph_price_any");
+  document.getElementById("s-max-price").placeholder = t("ph_price_any");
+  document.getElementById("s-plz").placeholder = t("ph_plz");
+  document.getElementById("cfg-telegram-token").placeholder = t("ph_bot_token");
+  document.getElementById("cfg-telegram-chat-id").placeholder = t("ph_chat_id");
+
+  // Header-Titel je nach aktuellem Tab
+  if (!activeSearchId) {
+    const titleKey = `header_${activeStatus}_title`;
+    const descKey = `header_${activeStatus}_desc`;
+    document.getElementById("header-title").innerText = t(titleKey);
+    document.getElementById("header-desc").innerText = t(descKey);
+  }
+}
 
 async function initApp() {
   await loadSearches();
@@ -41,7 +116,7 @@ function setupEventListeners() {
   document.getElementById("btn-refresh-results").addEventListener("click", () => {
     loadSearches();
     loadResults();
-    showToast("Trefferliste aktualisiert", "success");
+    showToast(t("toast_refresh"), "success");
   });
   document.getElementById("btn-mark-all-read").addEventListener("click", markAllAsRead);
   document.getElementById("btn-open-settings").addEventListener("click", openSettingsModal);
@@ -54,7 +129,7 @@ function setupEventListeners() {
   });
 
   document.querySelectorAll("[data-close-modal]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
+    btn.addEventListener("click", () => {
       const modalId = btn.getAttribute("data-close-modal");
       closeModal(modalId);
     });
@@ -82,19 +157,13 @@ function setNavFilter(status, searchId) {
     const el = document.getElementById(`search-nav-${searchId}`);
     if (el) el.classList.add("active");
     const s = allSearches.find(x => x.id === searchId);
-    document.getElementById("header-title").innerText = s ? s.name : "Suchauftrag";
-    document.getElementById("header-desc").innerText = s ? `Hauptbegriff: "${s.query}"` : "";
+    document.getElementById("header-title").innerText = s ? s.name : t("nav_searches");
+    document.getElementById("header-desc").innerText = s ? `Query: "${s.query}"` : "";
   } else {
     const el = document.getElementById(`nav-${status}`);
     if (el) el.classList.add("active");
-    const titles = {
-      all: "Alle Treffer",
-      new: "Neue Treffer",
-      starred: "Favoriten ⭐",
-      dismissed: "Archiv / Ignoriert"
-    };
-    document.getElementById("header-title").innerText = titles[status] || "Treffer";
-    document.getElementById("header-desc").innerText = "Übersicht über alle gefundenen Kleinanzeigen";
+    document.getElementById("header-title").innerText = t(`header_${status}_title`);
+    document.getElementById("header-desc").innerText = t(`header_${status}_desc`);
   }
 
   loadResults();
@@ -115,7 +184,7 @@ async function loadSearches(showSpinner = true) {
 async function loadResults(showSpinner = true) {
   const container = document.getElementById("results-container");
   if (showSpinner && allResults.length === 0) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⏳</div><p>Lade Treffer...</p></div>`;
+    container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">${getSvgIcon('spinner', 32)}</div><p>${t('loading_results')}</p></div>`;
   }
 
   const shipping = document.getElementById("filter-shipping").value;
@@ -138,7 +207,7 @@ async function loadResults(showSpinner = true) {
     loadStats();
   } catch (err) {
     console.error("Fehler beim Laden der Ergebnisse:", err);
-    container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><p>Fehler beim Laden der Treffer.</p></div>`;
+    container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">${getSvgIcon('alert', 32)}</div><p>${t('error_results')}</p></div>`;
   }
 }
 
@@ -162,7 +231,7 @@ function renderSearchesList() {
   list.innerHTML = "";
 
   if (allSearches.length === 0) {
-    list.innerHTML = `<div style="padding: 10px; font-size: 12px; color: var(--text-muted); text-align: center;">Noch keine Suchaufträge angelegt.</div>`;
+    list.innerHTML = `<div style="padding: 10px; font-size: 12px; color: var(--text-muted); text-align: center;">${t('nav_no_searches')}</div>`;
     return;
   }
 
@@ -171,14 +240,14 @@ function renderSearchesList() {
     item.className = `nav-item ${activeSearchId === s.id ? "active" : ""}`;
     item.id = `search-nav-${s.id}`;
     
-    const statusIcon = s.is_active ? "🟢" : "⚪";
+    const statusIcon = s.is_active ? getSvgIcon('dotActive', 10) : getSvgIcon('dotInactive', 10);
     item.innerHTML = `
-      <span style="font-size: 11px;">${statusIcon}</span>
+      <span style="display: inline-flex; align-items: center;">${statusIcon}</span>
       <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(s.name)}</span>
       <div class="search-item-actions">
-        <button class="btn-icon-tiny" title="Jetzt ausführen" onclick="runSearchNow(event, ${s.id})">▶</button>
-        <button class="btn-icon-tiny" title="Bearbeiten" onclick="editSearch(event, ${s.id})">✏️</button>
-        <button class="btn-icon-tiny" title="Löschen" onclick="confirmDeleteSearch(event, ${s.id})">🗑️</button>
+        <button class="btn-icon-tiny" title="${currentLang === 'de' ? 'Jetzt ausführen' : 'Run now'}" onclick="runSearchNow(event, ${s.id})">${getSvgIcon('play', 12)}</button>
+        <button class="btn-icon-tiny" title="${currentLang === 'de' ? 'Bearbeiten' : 'Edit'}" onclick="editSearch(event, ${s.id})">${getSvgIcon('pencil', 12)}</button>
+        <button class="btn-icon-tiny" title="${currentLang === 'de' ? 'Löschen' : 'Delete'}" onclick="confirmDeleteSearch(event, ${s.id})">${getSvgIcon('trash', 12)}</button>
       </div>
     `;
 
@@ -193,9 +262,9 @@ function renderResultsGrid() {
   if (allResults.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
-        <div class="empty-state-icon">🔍</div>
-        <h3>Keine Treffer gefunden</h3>
-        <p>Entweder wurden für diesen Filter noch keine passenden Kleinanzeigen gefunden oder der Wächter sucht gerade.</p>
+        <div class="empty-state-icon">${getSvgIcon('search', 40)}</div>
+        <h3>${t('empty_title')}</h3>
+        <p>${t('empty_desc')}</p>
       </div>
     `;
     return;
@@ -205,9 +274,11 @@ function renderResultsGrid() {
   allResults.forEach(r => {
     const isNew = r.status === "new";
     const isStarred = r.status === "starred";
-    const starIcon = isStarred ? "⭐" : "☆";
-    const starTitle = isStarred ? "Aus Favoriten entfernen" : "Als Favorit merken";
-    const shippingBadge = r.shipping_possible ? "📦 Versand" : "📍 Abholung";
+    const starIcon = isStarred ? getSvgIcon('starFilled', 16) : getSvgIcon('star', 16);
+    const starTitle = isStarred ? t('card_star_remove') : t('card_star_add');
+    const shippingBadge = r.shipping_possible 
+      ? `${getSvgIcon('package', 12)} ${t('card_shipping')}` 
+      : `${getSvgIcon('mapPin', 12)} ${t('card_pickup')}`;
     const thumb = r.thumbnail_url || "/static/logo.svg";
 
     html += `
@@ -221,7 +292,7 @@ function renderResultsGrid() {
         <div class="result-card-body">
           <div class="result-tags">
             <span class="tag tag-highlight">${escapeHtml(r.search_name || 'Suche')}</span>
-            ${r.ocr_text ? '<span class="tag" title="Text in Fotos gefunden">📷 Bild-Text</span>' : ''}
+            ${r.ocr_text ? `<span class="tag" title="Text in Fotos gefunden">${getSvgIcon('camera', 12)} ${t('card_image_text')}</span>` : ''}
           </div>
 
           <a href="${escapeHtml(r.url)}" target="_blank" class="result-title" onclick="event.stopPropagation()">
@@ -229,10 +300,10 @@ function renderResultsGrid() {
           </a>
 
           <div class="result-location">
-            📍 ${escapeHtml(r.location || 'Deutschland')}
+            ${getSvgIcon('mapPin', 12)} ${escapeHtml(r.location || 'Deutschland')}
           </div>
 
-          ${r.match_reason ? `<div class="result-match-reason">💡 ${escapeHtml(r.match_reason)}</div>` : ''}
+          ${r.match_reason ? `<div class="result-match-reason">${getSvgIcon('lightbulb', 13)} ${escapeHtml(r.match_reason)}</div>` : ''}
 
           <div class="result-footer-actions" onclick="event.stopPropagation()">
             <div style="display: flex; gap: 4px;">
@@ -240,17 +311,18 @@ function renderResultsGrid() {
                 ${starIcon}
               </button>
               ${isNew ? `
-                <button class="btn btn-ghost btn-sm" title="Als gelesen markieren" onclick="setResultStatus(${r.id}, 'read')">
-                  ✓ Gelesen
+                <button class="btn btn-ghost btn-sm" title="${t('card_read')}" onclick="setResultStatus(${r.id}, 'read')">
+                  ${getSvgIcon('check', 13)} ${t('card_read')}
                 </button>
               ` : ''}
-              <button class="btn btn-ghost btn-sm" title="Ignorieren / Archivieren" onclick="setResultStatus(${r.id}, 'dismissed')">
-                ✕
+              <button class="btn btn-ghost btn-sm" title="${t('card_dismiss')}" onclick="setResultStatus(${r.id}, 'dismissed')">
+                ${getSvgIcon('x', 14)}
               </button>
             </div>
             
-            <a href="${escapeHtml(r.url)}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration: none;">
-              Öffnen ↗
+            <a href="${escapeHtml(r.url)}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+              <span>${t('card_open')}</span>
+              ${getSvgIcon('externalLink', 12)}
             </a>
           </div>
         </div>
@@ -278,7 +350,6 @@ function filterResultsLocally() {
 }
 
 function renderResultsGridWithList(list) {
-  // Lokales Rendern bei Sofort-Tippen
   const prev = allResults;
   allResults = list;
   renderResultsGrid();
@@ -292,20 +363,19 @@ function openDetailModal(resultId) {
   if (!r) return;
   selectedResult = r;
 
-  // Wenn neu, direkt als gelesen markieren
   if (r.status === "new") {
     setResultStatus(r.id, "read", false);
   }
 
   document.getElementById("detail-title").innerText = r.title;
   document.getElementById("detail-price").innerText = r.price || "K.A.";
-  document.getElementById("detail-location").innerText = `${r.location} (${r.shipping_possible ? "Versand möglich" : "Nur Abholung"})`;
+  document.getElementById("detail-location").innerText = `${r.location} (${r.shipping_possible ? t('card_shipping') : t('card_pickup')})`;
   document.getElementById("detail-search-name").innerText = r.search_name || "Suchauftrag";
-  document.getElementById("detail-match-reason").innerText = r.match_reason || "Gefunden";
+  document.getElementById("detail-match-reason").innerText = r.match_reason || "";
   document.getElementById("detail-link").href = r.url;
-  document.getElementById("detail-description").innerText = r.description || "Keine Beschreibung vorhanden.";
+  document.getElementById("detail-description").innerText = r.description || t("no_description");
 
-  // Bildergalerie
+  // Galerie
   const gallery = document.getElementById("detail-gallery");
   gallery.innerHTML = "";
   if (r.images && r.images.length > 0) {
@@ -317,7 +387,7 @@ function openDetailModal(resultId) {
       gallery.appendChild(img);
     });
   } else {
-    gallery.innerHTML = `<span style="font-size: 12px; color: var(--text-muted);">Keine weiteren Bilder vorhanden.</span>`;
+    gallery.innerHTML = `<span style="font-size: 12px; color: var(--text-muted);">${t('no_images')}</span>`;
   }
 
   // OCR Box
@@ -346,14 +416,14 @@ async function setResultStatus(id, newStatus, refresh = true) {
       loadStats();
     }
   } catch (err) {
-    showToast("Status-Änderung fehlgeschlagen", "error");
+    showToast("Status error", "error");
   }
 }
 
 function toggleStar(id, currentStatus) {
   const nextStatus = currentStatus === "starred" ? "read" : "starred";
   setResultStatus(id, nextStatus);
-  showToast(nextStatus === "starred" ? "Zu Favoriten hinzugefügt ⭐" : "Aus Favoriten entfernt", "success");
+  showToast(nextStatus === "starred" ? t("toast_starred") : t("toast_unstarred"), "success");
 }
 
 async function markAllAsRead() {
@@ -361,10 +431,10 @@ async function markAllAsRead() {
     await fetch(`/api/results/mark-all-read${activeSearchId ? `?search_id=${activeSearchId}` : ''}`, {
       method: "POST"
     });
-    showToast("Alle Treffer als gelesen markiert", "success");
+    showToast(t("toast_all_read"), "success");
     loadResults();
   } catch (err) {
-    showToast("Fehler beim Markieren", "error");
+    showToast("Error", "error");
   }
 }
 
@@ -375,7 +445,7 @@ function openSearchModal(searchData = null) {
   form.reset();
 
   if (searchData) {
-    document.getElementById("search-modal-title").innerText = "Suchauftrag bearbeiten";
+    document.getElementById("search-modal-title").innerText = t("modal_search_edit_title");
     document.getElementById("search-id-input").value = searchData.id;
     document.getElementById("s-name").value = searchData.name || "";
     document.getElementById("s-query").value = searchData.query || "";
@@ -393,7 +463,7 @@ function openSearchModal(searchData = null) {
     document.getElementById("s-interval").value = searchData.interval_minutes || 15;
     document.getElementById("s-is-active").checked = Boolean(searchData.is_active);
   } else {
-    document.getElementById("search-modal-title").innerText = "Neuen Suchauftrag anlegen";
+    document.getElementById("search-modal-title").innerText = t("modal_search_new_title");
     document.getElementById("search-id-input").value = "";
     document.getElementById("s-interval").value = 15;
     document.getElementById("s-search-in-desc").checked = true;
@@ -414,7 +484,7 @@ async function editSearch(event, id) {
 
 async function runSearchNow(event, id) {
   event.stopPropagation();
-  showToast("Suche wird im Hintergrund ausgeführt...", "success");
+  showToast(t("toast_search_triggered"), "success");
   try {
     await fetch(`/api/searches/${id}/run`, { method: "POST" });
     setTimeout(() => {
@@ -422,23 +492,23 @@ async function runSearchNow(event, id) {
       loadStats();
     }, 3000);
   } catch (err) {
-    showToast("Fehler beim Starten der Suche", "error");
+    showToast("Error", "error");
   }
 }
 
 async function confirmDeleteSearch(event, id) {
   event.stopPropagation();
-  if (confirm("Möchtest du diesen Suchauftrag und alle zugehörigen Treffer wirklich löschen?")) {
+  if (confirm(t("confirm_delete_search"))) {
     try {
       await fetch(`/api/searches/${id}`, { method: "DELETE" });
-      showToast("Suchauftrag gelöscht", "success");
+      showToast(t("toast_search_deleted"), "success");
       if (activeSearchId === id) {
         setNavFilter("all", null);
       }
       loadSearches();
       loadResults();
     } catch (err) {
-      showToast("Fehler beim Löschen", "error");
+      showToast("Error", "error");
     }
   }
 }
@@ -471,21 +541,21 @@ async function handleSearchFormSubmit(e) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      showToast("Suchauftrag aktualisiert", "success");
+      showToast(t("toast_search_saved"), "success");
     } else {
       await fetch("/api/searches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      showToast("Suchauftrag angelegt & Erstsuche gestartet", "success");
+      showToast(t("toast_search_created"), "success");
     }
 
     closeModal("modal-search");
     loadSearches();
     loadResults();
   } catch (err) {
-    showToast("Fehler beim Speichern des Suchauftrags", "error");
+    showToast("Error saving monitor", "error");
   }
 }
 
@@ -502,7 +572,7 @@ async function openSettingsModal() {
     document.getElementById("cfg-email-port").value = settings.email_smtp_port || "587";
     document.getElementById("cfg-email-user").value = settings.email_smtp_user || "";
     document.getElementById("cfg-email-password").value = "";
-    document.getElementById("cfg-email-password").placeholder = settings.email_smtp_password_masked ? "●●●●●●●● (Unverändert)" : "";
+    document.getElementById("cfg-email-password").placeholder = settings.email_smtp_password_masked ? t("ph_password_unchanged") : "";
     document.getElementById("cfg-email-tls").checked = settings.email_smtp_tls === "1" || settings.email_smtp_tls === true;
     document.getElementById("cfg-email-from").value = settings.email_from || "";
     document.getElementById("cfg-email-to").value = settings.email_to || "";
@@ -510,7 +580,7 @@ async function openSettingsModal() {
 
     openModal("modal-settings");
   } catch (err) {
-    showToast("Einstellungen konnten nicht geladen werden", "error");
+    showToast("Settings error", "error");
   }
 }
 
@@ -539,17 +609,17 @@ async function handleSettingsFormSubmit(e) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
-    showToast("Einstellungen gespeichert", "success");
+    showToast(t("toast_settings_saved"), "success");
     closeModal("modal-settings");
   } catch (err) {
-    showToast("Fehler beim Speichern der Einstellungen", "error");
+    showToast("Error saving settings", "error");
   }
 }
 
 async function testTelegram() {
   const token = document.getElementById("cfg-telegram-token").value.trim();
   const chatId = document.getElementById("cfg-telegram-chat-id").value.trim();
-  showToast("Sende Telegram Testnachricht...", "info");
+  showToast("Testing Telegram...", "info");
 
   try {
     const res = await fetch("/api/settings/test-telegram", {
@@ -564,7 +634,7 @@ async function testTelegram() {
       showToast(data.message, "error");
     }
   } catch (err) {
-    showToast("Netzwerkfehler beim Telegram Test", "error");
+    showToast("Network error", "error");
   }
 }
 
@@ -580,7 +650,7 @@ async function testEmail() {
   const pass = document.getElementById("cfg-email-password").value;
   if (pass) payload.email_smtp_password = pass;
 
-  showToast("Sende Test-E-Mail...", "info");
+  showToast("Testing Email...", "info");
   try {
     const res = await fetch("/api/settings/test-email", {
       method: "POST",
@@ -594,46 +664,46 @@ async function testEmail() {
       showToast(data.message, "error");
     }
   } catch (err) {
-    showToast("Netzwerkfehler beim E-Mail Test", "error");
+    showToast("Network error", "error");
   }
 }
 
 async function checkUpdate() {
   const statusEl = document.getElementById("update-status-msg");
-  statusEl.innerText = "Prüfe GitHub auf neue Versionen...";
+  statusEl.innerText = t("status_checking_update");
   try {
     const res = await fetch("/api/system/update/check");
     const data = await res.json();
     if (data.error) {
-      statusEl.innerHTML = `<span style="color: #ef4444;">⚠️ ${escapeHtml(data.error)}</span>`;
+      statusEl.innerHTML = `<span style="color: #ef4444;">${escapeHtml(data.error)}</span>`;
     } else if (data.update_available) {
       statusEl.innerHTML = `
-        <span style="color: #86b817; font-weight: bold;">🎉 Neue Version verfügbar: v${escapeHtml(data.latest_version)}</span>
+        <span style="color: #86b817; font-weight: bold;">${t('status_update_avail')} v${escapeHtml(data.latest_version)}</span>
         <p style="font-size: 11.5px; margin-top: 4px; color: var(--text-secondary);">${escapeHtml(data.release_notes)}</p>
       `;
       document.getElementById("btn-perform-update").style.display = "inline-flex";
     } else {
-      statusEl.innerHTML = `<span style="color: #10b981;">✓ KleinanzeigenRadar ist auf dem neuesten Stand (v${escapeHtml(data.current_version)}).</span>`;
+      statusEl.innerHTML = `<span style="color: #10b981;">${t('status_up_to_date')} (v${escapeHtml(data.current_version)}).</span>`;
     }
   } catch (err) {
-    statusEl.innerText = "Fehler beim Abrufen der Update-Informationen.";
+    statusEl.innerText = "Error checking updates.";
   }
 }
 
 async function performUpdate() {
   const statusEl = document.getElementById("update-status-msg");
-  statusEl.innerText = "Aktualisierung wird ausgeführt...";
+  statusEl.innerText = "Updating...";
   try {
     const res = await fetch("/api/system/update/perform", { method: "POST" });
     const data = await res.json();
     if (data.success) {
-      statusEl.innerHTML = `<span style="color: #10b981; font-weight: bold;">✓ ${escapeHtml(data.message)}</span>`;
-      showToast("Update erfolgreich!", "success");
+      statusEl.innerHTML = `<span style="color: #10b981; font-weight: bold;">${escapeHtml(data.message)}</span>`;
+      showToast("Update successful!", "success");
     } else {
-      statusEl.innerHTML = `<span style="color: #ef4444;">⚠️ ${escapeHtml(data.message)}</span>`;
+      statusEl.innerHTML = `<span style="color: #ef4444;">${escapeHtml(data.message)}</span>`;
     }
   } catch (err) {
-    statusEl.innerText = "Fehler beim Durchführen der Aktualisierung.";
+    statusEl.innerText = "Update error.";
   }
 }
 

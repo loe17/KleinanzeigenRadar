@@ -39,7 +39,7 @@ if [ "$INSTALL_TYPE" == "docker" ] || docker ps -a --format '{{.Names}}' 2>/dev/
         docker stop kleinanzeigen-radar 2>/dev/null || true
         docker rm kleinanzeigen-radar 2>/dev/null || true
     fi
-    echo -e "${GREEN}  ✓ Docker-Container gestoppt und entfernt.${NC}"
+    echo -e "${GREEN}  [OK] Docker-Container gestoppt und entfernt.${NC}"
 fi
 
 # 2. Native Systemd-Deinstallation
@@ -55,7 +55,7 @@ if [ "$INSTALL_TYPE" == "native" ] || [ -f "/etc/systemd/system/kleinanzeigen-ra
     $SUDO_CMD systemctl disable kleinanzeigen-radar 2>/dev/null || true
     $SUDO_CMD rm -f /etc/systemd/system/kleinanzeigen-radar.service
     $SUDO_CMD systemctl daemon-reload
-    echo -e "${GREEN}  ✓ systemd-Dienst entfernt.${NC}"
+    echo -e "${GREEN}  [OK] systemd-Dienst entfernt.${NC}"
 
     if [ -d "$INSTALL_DIR/venv" ]; then
         echo -e "  -> Entferne Python-Umgebung (venv)..."
@@ -73,9 +73,9 @@ DATA_CHOICE=${DATA_CHOICE:-B}
 if [[ "$DATA_CHOICE" =~ ^[Ll]$ ]]; then
     echo -e "${YELLOW}Lösche Datenverzeichnis...${NC}"
     rm -rf "$INSTALL_DIR/data"
-    echo -e "${GREEN}  ✓ Datenverzeichnis gelöscht.${NC}"
+    echo -e "${GREEN}  [OK] Datenverzeichnis gelöscht.${NC}"
 else
-    echo -e "${GREEN}  ✓ Deine Suchen & Treffer in 'data/' wurden sicher aufbewahrt.${NC}"
+    echo -e "${GREEN}  [OK] Deine Suchen & Treffer in 'data/' wurden sicher aufbewahrt.${NC}"
 fi
 
 # Aufräumen
