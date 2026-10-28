@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ app_name }} - Dein Kleinanzeigen-Wächter</title>
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Linke Seitenleiste (Notion-Stil) -->
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="/static/logo.svg" alt="Logo" class="brand-logo">
+        <div style="flex: 1;">
+          <div class="brand-title">{{ app_name }}</div>
+        </div>
+        <span class="brand-badge">v{{ version }}</span>
+      </div>
+
+      <!-- Hauptnavigation -->
+      <div class="nav-section-title">Übersicht</div>
+      <div class="nav-item active" id="nav-all">
+        <span>📬</span>
+        <span>Alle Treffer</span>
+        <span class="count" id="count-all">0</span>
+      </div>
+      <div class="nav-item" id="nav-new">
+        <span>✨</span>
+        <span>Neu eingetroffen</span>
+        <span class="count" id="count-new">0</span>
+      </div>
+      <div class="nav-item" id="nav-starred">
+        <span>⭐</span>
+        <span>Favoriten</span>
+        <span class="count" id="count-starred">0</span>
+      </div>
+      <div class="nav-item" id="nav-dismissed">
+        <span>📁</span>
+        <span>Archiv / Ignoriert</span>
+      </div>
+
+      <!-- Suchaufträge Sektion -->
+      <div class="nav-section-title" style="margin-top: 14px;">
+        <span>Suchaufträge</span>
+        <button class="btn-icon-tiny" id="btn-add-search" title="Neuen Suchauftrag anlegen">＋</button>
+      </div>
+
+      <div class="searches-list" id="searches-list">
+        <!-- Wird dynamisch mit JavaScript befüllt -->
+      </div>
+
+      <!-- Seitenleisten-Fußbereich -->
+      <div class="sidebar-footer">
+        <div class="nav-item" id="btn-open-settings">
+          <span>⚙️</span>
+          <span>Einstellungen &amp; Updates</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Hauptbereich -->
+    <main class="main-content">
+      
+      <!-- Kopfbereich -->
+      <header class="content-header">
+        <div class="header-title-block">
+          <h1 id="header-title">Alle Treffer</h1>
+          <p id="header-desc">Übersicht über alle gefundenen Kleinanzeigen</p>
+        </div>
+
+        <div class="header-actions">
+          <button class="btn btn-secondary btn-sm" id="btn-mark-all-read" title="Alle sichtbaren Treffer als gelesen markieren">
+            ✓ Alle gelesen
+          </button>
+          <button class="btn btn-secondary btn-sm" id="btn-refresh-results" title="Trefferliste neu laden">
+            🔄 Aktualisieren
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="openSearchModal()">
+            ＋ Neuer Suchauftrag
+          </button>
+        </div>
+      </header>
+
+      <!-- Filterleiste (Notion/Kaneo-Stil) -->
+      <div class="filter-bar">
+        <div class="search-input-box">
+          <span class="search-input-icon">🔍</span>
+          <input type="text" id="filter-search-input" placeholder="Treffer durchsuchen (Titel, Text, Bild-Info)...">
+        </div>
+
+        <select class="filter-select" id="filter-shipping" title="Versandfilter">
+          <option value="all">📦 Alle Angebote</option>
+          <option value="shipping_only">📦 Nur mit Versand</option>
+          <option value="pickup_only">📍 Nur Selbstabholung</option>
+        </select>
+
+        <input type="number" class="filter-input-number" id="filter-min-price" placeholder="Min €" style="width: 85px;">
+        <input type="number" class="filter-input-number" id="filter-max-price" placeholder="Max €" style="width: 85px;">
+      </div>
+
+      <!-- Treffer-Raster -->
+      <div class="results-container" id="results-container">
+        <!-- Wird dynamisch befüllt -->
+      </div>
+
+    </main>
+  </div>
+
+  <!-- MODAL: Suchauftrag anlegen / bearbeiten -->
+  <div class="modal-overlay" id="modal-search">
+    <div class="modal-box modal-box-large">
+      <div class="modal-header">
+        <h2 id="search-modal-title">Neuen Suchauftrag anlegen</h2>
+        <button class="btn-icon-tiny" data-close-modal="modal-search" style="font-size: 16px;">✕</button>
+      </div>
+      <form id="search-form">
+        <input type="hidden" id="search-id-input">
+        <div class="modal-body">
+          
+          <div class="form-row">
+            <div class="form-group" style="flex: 2;">
+              <label class="form-label">Name des Suchauftrags *</label>
+              <input type="text" class="form-control" id="s-name" placeholder="z. B. MacBook Pro M1 16GB" required>
+            </div>
+            <div class="form-group" style="flex: 2;">
+              <label class="form-label">Suchbegriff auf Kleinanzeigen *</label>
+              <input type="text" class="form-control" id="s-query" placeholder="z. B. Macbook Pro" required>
+              <div class="form-hint">Der Hauptbegriff, mit dem Kleinanzeigen durchsucht wird.</div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Zusätzliche Pflicht- und Ausschlussbegriffe (optional)</label>
+            <textarea class="form-control" id="s-keywords" rows="2" placeholder="z. B. M1, 16GB, -defekt, -bastler"></textarea>
+            <div class="form-hint">Trenne Begriffe durch Kommas. Begriffe mit Minus (-) wie <code>-defekt</code> sortieren Angebote automatisch aus.</div>
+          </div>
+
+          <div class="form-row" style="background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px;">
+            <label class="form-check" style="flex: 1;">
+              <input type="checkbox" id="s-search-in-desc" checked>
+              <span>Auch Anzeigentext durchsuchen</span>
+            </label>
+            <label class="form-check" style="flex: 1;">
+              <input type="checkbox" id="s-ocr-images" checked>
+              <span>Bilder analysieren (Texterkennung)</span>
+            </label>
+            <label class="form-check" style="flex: 1;">
+              <input type="checkbox" id="s-case-sensitive">
+              <span>Groß-/Kleinschreibung beachten</span>
+            </label>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Mindestpreis (€)</label>
+              <input type="number" class="form-control" id="s-min-price" placeholder="Beliebig">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Maximalpreis (€)</label>
+              <input type="number" class="form-control" id="s-max-price" placeholder="Beliebig">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Versandoption</label>
+              <select class="form-control" id="s-shipping">
+                <option value="all">Egal (Versand &amp; Abholung)</option>
+                <option value="shipping_only">Nur Inserate mit Versand</option>
+                <option value="pickup_only">Nur Selbstabholung</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Postleitzahl (optional)</label>
+              <input type="text" class="form-control" id="s-plz" placeholder="z. B. 10115">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Umkreis in km</label>
+              <select class="form-control" id="s-radius">
+                <option value="0">Keine Beschränkung</option>
+                <option value="5">5 km</option>
+                <option value="10">10 km</option>
+                <option value="20">20 km</option>
+                <option value="30">30 km</option>
+                <option value="50">50 km</option>
+                <option value="100">100 km</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Prüfintervall</label>
+              <select class="form-control" id="s-interval">
+                <option value="5">Alle 5 Minuten</option>
+                <option value="10">Alle 10 Minuten</option>
+                <option value="15" selected>Alle 15 Minuten</option>
+                <option value="30">Alle 30 Minuten</option>
+                <option value="60">Jede Stunde</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row" style="margin-top: 10px;">
+            <label class="form-check" style="flex: 1;">
+              <input type="checkbox" id="s-notify-telegram" checked>
+              <span>Telegram-Benachrichtigung</span>
+            </label>
+            <label class="form-check" style="flex: 1;">
+              <input type="checkbox" id="s-notify-email" checked>
+              <span>E-Mail-Benachrichtigung</span>
+            </label>
+            <label class="form-check" style="flex: 1;">
+              <input type="checkbox" id="s-is-active" checked>
+              <span>Suchauftrag aktiv</span>
+            </label>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal="modal-search">Abbrechen</button>
+          <button type="submit" class="btn btn-primary">Suchauftrag speichern</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Inserat Detailansicht -->
+  <div class="modal-overlay" id="modal-detail">
+    <div class="modal-box modal-box-large">
+      <div class="modal-header">
+        <div style="flex: 1; overflow: hidden; padding-right: 12px;">
+          <h2 id="detail-title" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Detailansicht</h2>
+          <span style="font-size: 12px; color: var(--text-secondary);" id="detail-search-name"></span>
+        </div>
+        <button class="btn-icon-tiny" data-close-modal="modal-detail" style="font-size: 16px;">✕</button>
+      </div>
+      <div class="modal-body">
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div style="font-size: 24px; font-weight: bold; color: var(--primary-hover);" id="detail-price"></div>
+          <a id="detail-link" href="#" target="_blank" class="btn btn-primary btn-sm" style="text-decoration: none;">
+            Auf Kleinanzeigen öffnen ↗
+          </a>
+        </div>
+
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;" id="detail-location"></p>
+        
+        <div class="result-match-reason" id="detail-match-reason" style="margin-bottom: 14px;"></div>
+
+        <!-- Galerie -->
+        <div class="form-label">Bilder der Anzeige (Klicken zum Vergrößern):</div>
+        <div class="gallery-grid" id="detail-gallery"></div>
+
+        <!-- Erkannter Text in Fotos -->
+        <div id="detail-ocr-box" style="margin-top: 16px; display: none;">
+          <div class="form-label">🔍 In den Fotos erkannter Text (Bild-Analyse):</div>
+          <div class="ocr-box" id="detail-ocr-text"></div>
+        </div>
+
+        <!-- Volltext -->
+        <div style="margin-top: 16px;">
+          <div class="form-label">Vollständige Beschreibung des Verkäufers:</div>
+          <div style="font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; background: var(--bg-subtle); padding: 14px; border-radius: var(--radius-md);" id="detail-description"></div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close-modal="modal-detail">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Einstellungen & Updater -->
+  <div class="modal-overlay" id="modal-settings">
+    <div class="modal-box modal-box-large">
+      <div class="modal-header">
+        <h2>Einstellungen &amp; GitHub-Updates</h2>
+        <button class="btn-icon-tiny" data-close-modal="modal-settings" style="font-size: 16px;">✕</button>
+      </div>
+      <form id="settings-form">
+        <div class="modal-body">
+          
+          <!-- Telegram Bereich -->
+          <div style="margin-bottom: 20px;">
+            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #0284c7;">💬 Telegram Benachrichtigungen</h3>
+            <div class="form-row">
+              <div class="form-group" style="flex: 2;">
+                <label class="form-label">Bot Token</label>
+                <input type="text" class="form-control" id="cfg-telegram-token" placeholder="z. B. 123456789:AAHfk...">
+              </div>
+              <div class="form-group" style="flex: 1;">
+                <label class="form-label">Chat-ID</label>
+                <input type="text" class="form-control" id="cfg-telegram-chat-id" placeholder="z. B. 987654321">
+              </div>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-test-telegram">
+              🔔 Telegram-Testnachricht senden
+            </button>
+          </div>
+
+          <hr style="border: 0; border-top: 1px solid var(--border); margin: 16px 0;">
+
+          <!-- E-Mail SMTP Bereich -->
+          <div style="margin-bottom: 20px;">
+            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #059669;">✉️ E-Mail Benachrichtigungen (SMTP)</h3>
+            <div class="form-row">
+              <div class="form-group" style="flex: 2;">
+                <label class="form-label">SMTP-Server (Host)</label>
+                <input type="text" class="form-control" id="cfg-email-host" placeholder="smtp.gmail.com oder mail.gmx.net">
+              </div>
+              <div class="form-group" style="flex: 1;">
+                <label class="form-label">Port</label>
+                <input type="number" class="form-control" id="cfg-email-port" value="587">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Benutzername</label>
+                <input type="text" class="form-control" id="cfg-email-user" placeholder="deine-mail@example.com">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Passwort / App-Passwort</label>
+                <input type="password" class="form-control" id="cfg-email-password">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Absender-Adresse</label>
+                <input type="email" class="form-control" id="cfg-email-from" placeholder="radar@deinedomain.de">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Empfänger-Adresse</label>
+                <input type="email" class="form-control" id="cfg-email-to" placeholder="ziel-mail@example.com">
+              </div>
+            </div>
+
+            <label class="form-check" style="margin-top: 6px;">
+              <input type="checkbox" id="cfg-email-tls" checked>
+              <span>TLS / STARTTLS Verschlüsselung verwenden (empfohlen)</span>
+            </label>
+
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-test-email" style="margin-top: 8px;">
+              ✉️ Test-E-Mail senden
+            </button>
+          </div>
+
+          <hr style="border: 0; border-top: 1px solid var(--border); margin: 16px 0;">
+
+          <!-- GitHub Updater Bereich -->
+          <div>
+            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #4b5563;">🐙 GitHub &amp; Interner Updater</h3>
+            <div class="form-group">
+              <label class="form-label">GitHub Repository</label>
+              <input type="text" class="form-control" id="cfg-github-repo" value="loe17/KleinanzeigenRadar">
+              <div class="form-hint">Format: <code>Nutzername/Repository</code> auf GitHub.</div>
+            </div>
+
+            <div style="background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-md); margin-top: 10px;">
+              <div style="font-size: 13px; margin-bottom: 8px;" id="update-status-msg">
+                Installierte Version: <b>v{{ version }}</b>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-check-update">
+                  🔍 Auf Updates prüfen
+                </button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-perform-update" style="display: none;">
+                  ⬇️ Jetzt aktualisieren
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal="modal-settings">Abbrechen</button>
+          <button type="submit" class="btn btn-primary">Einstellungen speichern</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

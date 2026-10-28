@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Anwendungsdaten (lokale Datenbank & Cache)
+data/*.db
+data/*.sqlite
+data/*.db-journal
+
+# Installations-Status
+.install_type
+
+# IDEs & System
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

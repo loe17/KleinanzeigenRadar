@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  kleinanzeigen-radar:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kleinanzeigen-radar
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PORT=8000
+      - HOST=0.0.0.0
+      - TZ=Europe/Berlin
