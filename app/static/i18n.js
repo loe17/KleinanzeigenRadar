@@ -147,7 +147,15 @@ const TRANSLATIONS = {
     toast_refresh: "Trefferliste aktualisiert",
     status_checking_update: "Prüfe GitHub auf neue Versionen...",
     status_update_avail: "Neue Version verfügbar:",
-    status_up_to_date: "KleinanzeigenRadar ist auf dem neuesten Stand"
+    status_up_to_date: "KleinanzeigenRadar ist auf dem neuesten Stand",
+    update_progress_title: "Aktualisierung & Neustart",
+    update_downloading: "Lade Aktualisierung von GitHub herunter...",
+    update_restarting: "Update installiert. Server startet neu...",
+    update_waiting_server: "Warte auf Server-Neustart...",
+    update_finished: "Neustart erfolgreich! Lade Anwendung neu...",
+    update_reload_prompt: "Neustart abgeschlossen. Lade Seite neu...",
+    update_failed: "Aktualisierung fehlgeschlagen: ",
+    toast_update_started: "Update wird installiert und Server neu gestartet..."
   },
 
   en: {
@@ -295,7 +303,15 @@ const TRANSLATIONS = {
     toast_refresh: "Listings refreshed",
     status_checking_update: "Checking GitHub for updates...",
     status_update_avail: "New version available:",
-    status_up_to_date: "KleinanzeigenRadar is up to date"
+    status_up_to_date: "KleinanzeigenRadar is up to date",
+    update_progress_title: "Update & Restart",
+    update_downloading: "Downloading update from GitHub...",
+    update_restarting: "Update installed. Server is restarting...",
+    update_waiting_server: "Waiting for server to restart...",
+    update_finished: "Restart complete! Reloading application...",
+    update_reload_prompt: "Restart finished. Reloading page...",
+    update_failed: "Update failed: ",
+    toast_update_started: "Update installing and server restarting..."
   }
 };
 

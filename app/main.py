@@ -27,7 +27,7 @@ from app.database import (
 from app.scraper import fetch_live_result_count
 from app.watcher import watcher_service
 from app.notifier import test_telegram_connection, test_email_connection
-from app.updater import check_for_github_update, perform_update
+from app.updater import check_for_github_update, perform_update, schedule_restart
 
 # Logging konfigurieren
 logging.basicConfig(
@@ -243,3 +243,9 @@ async def api_update_check():
 @app.post("/api/system/update/perform")
 async def api_update_perform():
     return perform_update()
+
+@app.post("/api/system/restart")
+async def api_system_restart():
+    schedule_restart(1.0)
+    return {"success": True, "message": "Neustart eingeleitet..."}
+

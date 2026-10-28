@@ -432,6 +432,20 @@
                   <span data-i18n="btn_perform_update">Jetzt aktualisieren</span>
                 </button>
               </div>
+
+              <!-- Ladebalken & Neustart-Status -->
+              <div id="update-progress-card" class="update-progress-card" style="display: none;">
+                <div class="update-progress-header">
+                  <span id="update-progress-title" data-i18n="update_progress_title">Aktualisierung &amp; Neustart</span>
+                  <span class="update-progress-percent" id="update-progress-percent">0%</span>
+                </div>
+                <div class="progress-bar-track">
+                  <div class="progress-bar-fill" id="update-progress-bar"></div>
+                </div>
+                <div class="update-progress-status" id="update-progress-status">
+                  <span data-i18n="update_downloading">Lade Aktualisierung von GitHub herunter...</span>
+                </div>
+              </div>
             </div>
           </div>
 

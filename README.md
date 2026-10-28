@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-0.1.3-86b817.svg" alt="Version 0.1.3">
+  <img src="https://img.shields.io/badge/Version-0.1.4-86b817.svg" alt="Version 0.1.4">
   <img src="https://img.shields.io/badge/Domain-kleinanzeigenradar.local-purple.svg" alt="Local Domain">
   <img src="https://img.shields.io/badge/Sicherheit-HTTPS%20%7C%20SSL-green.svg" alt="HTTPS">
   <img src="https://img.shields.io/badge/Plattform-Linux%20%7C%20Docker-blue.svg" alt="Linux & Docker">
@@ -19,7 +19,7 @@
 
 ---
 
-## 🚀 1-Befehl-Installation (Empfohlen)
+## 1-Befehl-Installation (Empfohlen)
 
 Kopiere diesen **einzigen Befehl** in das Terminal deines Linux-Servers oder Raspberry Pis. Das Skript prüft alle Voraussetzungen, installiert fehlende Werkzeuge (inklusive Docker & Compose, falls noch nicht vorhanden) vollautomatisch, sucht selbstständig freie Ports und richtet die lokale Domain sowie HTTPS ein:
 
@@ -33,12 +33,12 @@ git clone https://github.com/loe17/KleinanzeigenRadar.git && cd KleinanzeigenRad
 ```
 
 Nach der Installation ist KleinanzeigenRadar sofort über dein lokales Netzwerk erreichbar:
-* 🔐 **HTTPS:** `https://kleinanzeigenradar.local:8443` (oder `https://deine-server-ip:8443`)
-* 🌐 **HTTP:** `http://kleinanzeigenradar.local:8000` (oder `http://deine-server-ip:8000`)
+* **HTTPS:** `https://kleinanzeigenradar.local:8443` (oder `https://deine-server-ip:8443`)
+* **HTTP:** `http://kleinanzeigenradar.local:8000` (oder `http://deine-server-ip:8000`)
 
 ---
 
-## 📸 Einblicke in die Anwendung
+## Einblicke in die Anwendung
 
 ### Das Dashboard
 Schlicht, fokussiert und ohne Ablenkung mit gestochen scharfen SVG-Grafiken und zweisprachiger Benutzeroberfläche (Deutsch & Englisch). Alle Treffer laufen zentral ein und lassen sich blitzschnell nach Status, Versandart oder Preisspanne filtern:
@@ -58,7 +58,7 @@ Sobald ein passendes Angebot online geht, erhältst du sofort eine Benachrichtig
 
 ---
 
-## ✨ Was kann KleinanzeigenRadar für dich tun?
+## Was kann KleinanzeigenRadar für dich tun?
 
 Normale Suchen auf Kleinanzeigen sind oft ungenau oder verpassen Schnäppchen, weil Verkäufer wichtige Details im Text vergessen oder Tippfehler machen. **KleinanzeigenRadar** findet diese Angebote trotzdem:
 
@@ -73,11 +73,11 @@ Normale Suchen auf Kleinanzeigen sind oft ungenau oder verpassen Schnäppchen, w
 * **Preisspanne:** Setze flexibel Mindest- und Höchstpreise fest.
 * **Sofort-Meldung via Telegram & E-Mail:** Kein ständiges manuelles Nachschauen mehr – dein Handy meldet sich sofort, wenn etwas Passendes eingestellt wird.
 * **SVG-Grafiken statt Emojis:** Alle Oberflächenelemente basieren auf sauberen, hochauflösenden Vektorgrafiken.
-* **Automatischer 1-Klick-Aktualisierer:** Prüft auf Knopfdruck über GitHub auf neue Versionen und aktualisiert sich auf Wunsch selbstständig.
+* **Automatischer 1-Klick-Aktualisierer mit Ladebalken & Neustart:** Prüft auf Knopfdruck über GitHub auf neue Versionen, lädt Aktualisierungen mit animiertem Ladebalken herunter und startet den Hintergrunddienst bzw. Docker-Container vollautomatisch neu.
 
 ---
 
-## ⚙️ Telegram & E-Mail einrichten
+## Telegram & E-Mail einrichten
 
 1. Klicke in der Web-Oberfläche unten links auf **„Einstellungen & Updates“**.
 2. **Telegram:**
@@ -90,14 +90,14 @@ Normale Suchen auf Kleinanzeigen sind oft ungenau oder verpassen Schnäppchen, w
 
 ---
 
-## 🔄 Updates über GitHub
+## Updates über GitHub
 
 * In der Web-Oberfläche unter **„Einstellungen & Updates“** kannst du jederzeit auf **„Auf Updates prüfen“** klicken.
-* Gibt es eine neue Version, klickst du auf **„Jetzt aktualisieren“** – die Anwendung holt sich die aktuellen Daten direkt von GitHub.
+* Mit Klick auf **„Jetzt aktualisieren“** zeigt KleinanzeigenRadar einen animierten Fortschrittsbalken, lädt die neuesten Daten von GitHub, führt den automatischen Dienst-Neustart durch und lädt das Dashboard im Browser neu, sobald der Server wieder erreichbar ist.
 
 ---
 
-## 🗑️ Deinstallation
+## Deinstallation
 
 Möchtest du die Anwendung irgendwann entfernen, genügt ein einziger Befehl im Projektordner:
 
@@ -109,19 +109,19 @@ Das Skript stoppt alle Dienste oder Container sauber und fragt dich, ob deine bi
 
 ---
 
-## 📁 Ordner-Struktur
+## Ordner-Struktur
 
 ```text
 KleinanzeigenRadar/
 ├── app/
-│   ├── config.py           # Konfiguration, Pfade & Version 0.1.3
+│   ├── config.py           # Konfiguration, Pfade & Version 0.1.4
 │   ├── database.py         # Schnelle SQLite-Datenbank für Suchen & Treffer
 │   ├── network_utils.py    # Automatische Suche nach freien Ports & IPs
 │   ├── ssl_cert.py         # Automatische SSL-Zertifikatsgenerierung (HTTPS)
 │   ├── scraper.py          # Schonendes Kleinanzeigen-Scraping & Wortfilter
 │   ├── ocr.py              # Foto-Texterkennung (Bild-Lupe)
 │   ├── notifier.py         # Telegram- & E-Mail-Benachrichtigungen
-│   ├── updater.py          # GitHub-Versionsprüfung & 1-Klick-Aktualisierer
+│   ├── updater.py          # GitHub-Versionsprüfung, Ladebalken & Auto-Restart
 │   ├── watcher.py          # Zuverlässiger Hintergrund-Wächter
 │   ├── static/             # CSS, JavaScript, i18n & SVG-Icons
 │   └── templates/          # Haupt-HTML-Oberfläche

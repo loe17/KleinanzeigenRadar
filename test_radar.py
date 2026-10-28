@@ -179,5 +179,13 @@ class TestKleinanzeigenRadar(unittest.TestCase):
         delete_search(s_id)
         self.assertIsNone(get_search(s_id))
 
+    def test_updater_module(self):
+        from app.config import VERSION
+        self.assertEqual(VERSION, "0.1.4")
+        update_info = check_for_github_update()
+        self.assertIn("current_version", update_info)
+        self.assertEqual(update_info["current_version"], "0.1.4")
+
 if __name__ == "__main__":
     unittest.main()
+

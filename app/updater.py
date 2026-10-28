@@ -1,12 +1,24 @@
 import os
 import subprocess
 import logging
+import threading
+import time
 import requests
 from typing import Dict, Any
 from app.config import VERSION, BASE_DIR
 from app.database import get_settings
 
 logger = logging.getLogger(__name__)
+
+def schedule_restart(delay_seconds: float = 1.5):
+    """Startet den Prozess nach kurzer Verzögerung neu (über Systemd oder Docker)."""
+    def _restart():
+        time.sleep(delay_seconds)
+        logger.info("Führe automatischen Neustart nach Update durch...")
+        os._exit(0)
+
+    t = threading.Thread(target=_restart, daemon=True)
+    t.start()
 
 def check_for_github_update() -> Dict[str, Any]:
     """Prüft über die GitHub API, ob eine neuere Version verfügbar ist."""
@@ -72,7 +84,7 @@ def check_for_github_update() -> Dict[str, Any]:
     return result
 
 def perform_update() -> Dict[str, Any]:
-    """Führt ein Update durch (z.B. per git pull falls als Git-Klon installiert)."""
+    """Führt ein Update durch (per git pull) und startet den Dienst automatisch neu."""
     git_dir = BASE_DIR / ".git"
     
     if not git_dir.exists():
@@ -90,11 +102,40 @@ def perform_update() -> Dict[str, Any]:
             text=True,
             timeout=30
         )
+        if proc.returncode != 0:
+            # Fallback falls ff-only meckert
+            proc = subprocess.run(
+                ["git", "pull"],
+                cwd=str(BASE_DIR),
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
         if proc.returncode == 0:
             output = proc.stdout.strip()
+            # Falls requirements vorhanden sind und venv existiert, Abhängigkeiten aktualisieren
+            pip_path = BASE_DIR / "venv" / "bin" / "pip"
+            if pip_path.exists():
+                try:
+                    subprocess.run(
+                        [str(pip_path), "install", "-r", "requirements.txt"],
+                        cwd=str(BASE_DIR),
+                        capture_output=True,
+                        text=True,
+                        timeout=60
+                    )
+                except Exception as pip_err:
+                    logger.warning("pip install nach Update fehlgeschlagen: %s", pip_err)
+
+            # Automatischen Neustart nach 1.5 Sekunden auslösen
+            schedule_restart(1.5)
+
             return {
                 "success": True,
-                "message": f"Update erfolgreich heruntergeladen: {output}. Bitte Anwendung neu starten (oder Dienst startet automatisch neu)."
+                "restarting": True,
+                "message": f"Update erfolgreich: {output}. Dienst startet jetzt automatisch neu.",
+                "output": output
             }
         else:
             return {

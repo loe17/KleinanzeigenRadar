@@ -805,6 +805,16 @@ async function openSettingsModal() {
     document.getElementById("cfg-email-to").value = settings.email_to || "";
     document.getElementById("cfg-github-repo").value = settings.github_repo || "loe17/KleinanzeigenRadar";
 
+    const progressCard = document.getElementById("update-progress-card");
+    if (progressCard) progressCard.style.display = "none";
+    const btnPerform = document.getElementById("btn-perform-update");
+    if (btnPerform) {
+      btnPerform.disabled = false;
+      btnPerform.style.display = "none";
+    }
+    const btnCheck = document.getElementById("btn-check-update");
+    if (btnCheck) btnCheck.disabled = false;
+
     openModal("modal-settings");
   } catch (err) {
     showToast("Settings error", "error");
@@ -911,6 +921,7 @@ async function checkUpdate() {
       document.getElementById("btn-perform-update").style.display = "inline-flex";
     } else {
       statusEl.innerHTML = `<span style="color: #10b981;">${t('status_up_to_date')} (v${escapeHtml(data.current_version)}).</span>`;
+      document.getElementById("btn-perform-update").style.display = "inline-flex";
     }
   } catch (err) {
     statusEl.innerText = "Error checking updates.";
@@ -918,20 +929,99 @@ async function checkUpdate() {
 }
 
 async function performUpdate() {
+  const btnPerform = document.getElementById("btn-perform-update");
+  const btnCheck = document.getElementById("btn-check-update");
+  const progressCard = document.getElementById("update-progress-card");
+  const progressBar = document.getElementById("update-progress-bar");
+  const progressPercent = document.getElementById("update-progress-percent");
+  const progressStatus = document.getElementById("update-progress-status");
   const statusEl = document.getElementById("update-status-msg");
-  statusEl.innerText = "Updating...";
-  try {
-    const res = await fetch("/api/system/update/perform", { method: "POST" });
-    const data = await res.json();
-    if (data.success) {
-      statusEl.innerHTML = `<span style="color: #10b981; font-weight: bold;">${escapeHtml(data.message)}</span>`;
-      showToast("Update successful!", "success");
-    } else {
-      statusEl.innerHTML = `<span style="color: #ef4444;">${escapeHtml(data.message)}</span>`;
-    }
-  } catch (err) {
-    statusEl.innerText = "Update error.";
+
+  if (btnPerform) btnPerform.disabled = true;
+  if (btnCheck) btnCheck.disabled = true;
+
+  if (progressCard) {
+    progressCard.style.display = "block";
+    progressCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
+
+  function setProgress(pct, statusText) {
+    if (progressBar) progressBar.style.width = pct + "%";
+    if (progressPercent) progressPercent.innerText = pct + "%";
+    if (progressStatus) progressStatus.innerText = statusText;
+  }
+
+  setProgress(15, t("update_downloading"));
+
+  let updateSuccess = false;
+  let updateData = null;
+
+  try {
+    setTimeout(() => {
+      if (!updateSuccess && progressBar && parseInt(progressBar.style.width) < 40) {
+        setProgress(35, t("update_downloading"));
+      }
+    }, 700);
+
+    const res = await fetch("/api/system/update/perform", { method: "POST" });
+    updateData = await res.json();
+    updateSuccess = updateData && updateData.success;
+  } catch (err) {
+    updateSuccess = false;
+    updateData = { message: "Netzwerkfehler beim Abrufen des Updates." };
+  }
+
+  if (!updateSuccess) {
+    setProgress(100, t("update_failed") + (updateData ? updateData.message : ""));
+    if (progressBar) progressBar.style.background = "#ef4444";
+    if (btnPerform) btnPerform.disabled = false;
+    if (btnCheck) btnCheck.disabled = false;
+    showToast((updateData && updateData.message) || "Update fehlgeschlagen", "error");
+    return;
+  }
+
+  // Update erfolgreich heruntergeladen
+  setProgress(60, t("update_restarting"));
+  showToast(t("toast_update_started"), "success");
+
+  // Animiere weiter zu 80% während der Server herunterfährt und neu startet
+  setTimeout(() => {
+    setProgress(80, t("update_waiting_server"));
+  }, 1600);
+
+  // Poll den Server, bis er wieder antwortet
+  let attempts = 0;
+  const maxAttempts = 35; // max 35 Sekunden
+  let reloaded = false;
+
+  setTimeout(() => {
+    const pollInterval = setInterval(async () => {
+      attempts++;
+      try {
+        const pingRes = await fetch(`/api/system/version?t=${Date.now()}`, { cache: "no-store" });
+        if (pingRes.ok && !reloaded) {
+          reloaded = true;
+          clearInterval(pollInterval);
+          setProgress(100, t("update_finished"));
+          setTimeout(() => {
+            window.location.reload();
+          }, 800);
+          return;
+        }
+      } catch (e) {
+        // Server startet gerade neu, Fehler ist hier normal
+      }
+
+      if (attempts >= maxAttempts && !reloaded) {
+        reloaded = true;
+        clearInterval(pollInterval);
+        setProgress(100, t("update_reload_prompt"));
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      }
+    }, 1000);
+  }, 2200);
 }
 
 // --- Hilfsfunktionen ---
