@@ -80,11 +80,14 @@ class StatusUpdate(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 async def index_page(request: Request):
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "app_name": APP_NAME,
-        "version": VERSION
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={
+            "app_name": APP_NAME,
+            "version": VERSION
+        }
+    )
 
 # --- API: Statistiken & Dashboard ---
 

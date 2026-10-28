@@ -3,6 +3,7 @@
 # KleinanzeigenRadar - Vollautomatisches Installationsskript
 # Unterstützt: Linux (x86_64, ARM64, ARMv7, Raspberry Pi)
 # Modi: Docker Container (Standard) oder Nativ (systemd)
+# Inklusive: Lokale Domain kleinanzeigenradar.local, HTTPS & automatische Portsuche
 # ==============================================================================
 
 set -e
@@ -79,9 +80,24 @@ install_package() {
     fi
 }
 
-# Sicherstellen, dass curl, ca-certificates und git bereitstehen
+# Sicherstellen, dass Basispakete bereitstehen
 install_package curl
 install_package ca-certificates
+install_package openssl
+
+# Lokale Namensauflösung für kleinanzeigenradar.local einrichten (mDNS / Avahi)
+echo -e "  -> Richte lokale Domain 'kleinanzeigenradar.local' ein..."
+if [ "$OS_ID" == "debian" ] || [ "$OS_ID" == "ubuntu" ] || [ "$OS_ID" == "raspbian" ]; then
+    if ! command -v avahi-daemon &> /dev/null; then
+        $SUDO_CMD apt-get update -qq && $SUDO_CMD apt-get install -y -qq avahi-daemon libnss-mdns 2>/dev/null || true
+    fi
+    $SUDO_CMD systemctl enable --now avahi-daemon 2>/dev/null || true
+fi
+
+# Lokalen Hosteintrag absichern
+if ! grep -q "kleinanzeigenradar.local" /etc/hosts 2>/dev/null; then
+    echo "127.0.0.1 kleinanzeigenradar.local" | $SUDO_CMD tee -a /etc/hosts >/dev/null 2>&1 || true
+fi
 
 # Arbeitsverzeichnis ermitteln
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
@@ -97,9 +113,38 @@ if [ ! -f "$INSTALL_DIR/Dockerfile" ] && [ ! -f "$INSTALL_DIR/run.py" ]; then
 fi
 
 cd "$INSTALL_DIR"
-mkdir -p "$INSTALL_DIR/data"
+mkdir -p "$INSTALL_DIR/data/certs"
 
-# 2. Installationsmodus bestimmen (Docker oder Nativ)
+# 2. Automatische Suche nach freien Ports
+check_port_free() {
+    local port=$1
+    if command -v python3 &> /dev/null; then
+        python3 -c "import socket; s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(('0.0.0.0', $port)); s.close()" &> /dev/null
+        return $?
+    else
+        (echo > /dev/tcp/127.0.0.1/$port) &>/dev/null && return 1 || return 0
+    fi
+}
+
+find_free_port() {
+    local p=$1
+    while ! check_port_free "$p"; do
+        p=$((p + 1))
+    done
+    echo "$p"
+}
+
+HTTP_PORT=$(find_free_port 8000)
+HTTPS_PORT=$(find_free_port 8443)
+
+if [ "$HTTP_PORT" != "8000" ]; then
+    echo -e "${YELLOW}Port 8000 ist belegt. Verwende stattdessen Port $HTTP_PORT.${NC}"
+fi
+if [ "$HTTPS_PORT" != "8443" ]; then
+    echo -e "${YELLOW}Port 8443 ist belegt. Verwende stattdessen Port $HTTPS_PORT.${NC}"
+fi
+
+# 3. Installationsmodus bestimmen (Docker oder Nativ)
 echo ""
 echo -e "${BLUE}[2/5] Wähle den gewünschten Installationsmodus:${NC}"
 
@@ -114,7 +159,6 @@ if [ -z "$MODE" ]; then
     echo "  1) Docker Container (Empfohlen - Alles isoliert im Container)"
     echo "  2) Nativ unter Linux (Als systemd Hintergrunddienst mit Python)"
     
-    # Sicherstellen, dass interaktive Eingabe auch via 'curl | bash' Pipe funktioniert
     if [ -t 0 ]; then
         read -p "Auswahl eingeben [1 oder 2, Standard: 1]: " USER_CHOICE
     elif [ -c /dev/tty ]; then
@@ -136,10 +180,8 @@ if [ "$MODE" == "1" ]; then
     if ! command -v docker &> /dev/null; then
         echo -e "${YELLOW}Docker ist noch nicht installiert. Starte automatische Docker-Installation...${NC}"
         
-        # Sicherstellen, dass curl da ist
         install_package curl
         
-        # Offizielles Docker-Installationsskript herunterladen & ausführen
         DOCKER_INSTALLED=false
         if command -v curl &> /dev/null; then
             curl -fsSL https://get.docker.com -o get-docker.sh && $SUDO_CMD sh get-docker.sh && DOCKER_INSTALLED=true
@@ -149,7 +191,6 @@ if [ "$MODE" == "1" ]; then
             rm -f get-docker.sh
         fi
 
-        # Fallback falls get.docker.com fehlschlägt
         if [ "$DOCKER_INSTALLED" = false ]; then
             echo -e "${YELLOW}Versuche Docker-Installation über System-Paketmanager...${NC}"
             if [ "$OS_ID" == "debian" ] || [ "$OS_ID" == "ubuntu" ] || [ "$OS_ID" == "raspbian" ]; then
@@ -188,16 +229,20 @@ if [ "$MODE" == "1" ]; then
 
     echo -e "${GREEN}  [OK] Docker und Compose sind bereit.${NC}"
 
+    # .env Datei mit den gewählten Ports erzeugen
+    cat <<EOF > "$INSTALL_DIR/.env"
+HTTP_PORT=$HTTP_PORT
+HTTPS_PORT=$HTTPS_PORT
+EOF
+
     echo -e "${BLUE}[4/5] Baue und starte KleinanzeigenRadar Docker Container...${NC}"
     cd "$INSTALL_DIR"
     
-    # Container starten
     if ! $DOCKER_COMPOSE_CMD up -d --build; then
         echo -e "${RED}Fehler beim Starten der Docker-Container. Versuche mit sudo...${NC}"
         $SUDO_CMD $DOCKER_COMPOSE_CMD up -d --build
     fi
 
-    # Markiere Installationstyp für Uninstaller
     echo "docker" > "$INSTALL_DIR/.install_type"
 
 # ==============================================================================
@@ -217,13 +262,12 @@ elif [ "$MODE" == "2" ]; then
             tesseract-ocr-deu \
             tesseract-ocr-eng \
             git \
-            curl
+            curl \
+            openssl
     elif [ "$OS_ID" == "fedora" ] || [ "$OS_ID" == "rhel" ] || [ "$OS_ID" == "centos" ]; then
-        $SUDO_CMD dnf install -y python3 python3-pip tesseract tesseract-langpack-deu git curl
+        $SUDO_CMD dnf install -y python3 python3-pip tesseract tesseract-langpack-deu git curl openssl
     elif [ "$OS_ID" == "arch" ] || [ "$OS_ID" == "manjaro" ]; then
-        $SUDO_CMD pacman -Sy --noconfirm python python-pip tesseract tesseract-data-deu git curl
-    else
-        echo -e "${YELLOW}Achtung: Unbekannte Linux-Distribution. Bitte stelle sicher, dass Python3, Venv und Tesseract-OCR installiert sind.${NC}"
+        $SUDO_CMD pacman -Sy --noconfirm python python-pip tesseract tesseract-data-deu git curl openssl
     fi
 
     echo -e "${BLUE}[4/5] Richte Python-Umgebung ein...${NC}"
@@ -235,7 +279,6 @@ elif [ "$MODE" == "2" ]; then
     ./venv/bin/pip install --upgrade pip
     ./venv/bin/pip install -r requirements.txt
 
-    # Systemd-Dienst einrichten
     echo -e "${BLUE}Erstelle systemd Hintergrunddienst 'kleinanzeigen-radar'...${NC}"
     CURRENT_USER=${SUDO_USER:-$USER}
     SERVICE_FILE="/etc/systemd/system/kleinanzeigen-radar.service"
@@ -252,7 +295,9 @@ WorkingDirectory=$INSTALL_DIR
 ExecStart=$INSTALL_DIR/venv/bin/python $INSTALL_DIR/run.py
 Restart=always
 RestartSec=5
-Environment=PORT=8000
+Environment=PORT=$HTTP_PORT
+Environment=SSL_PORT=$HTTPS_PORT
+Environment=ENABLE_HTTPS=true
 Environment=HOST=0.0.0.0
 
 [Install]
@@ -263,7 +308,6 @@ EOF"
     $SUDO_CMD systemctl enable kleinanzeigen-radar
     $SUDO_CMD systemctl restart kleinanzeigen-radar
 
-    # Markiere Installationstyp für Uninstaller
     echo "native" > "$INSTALL_DIR/.install_type"
 
 else
@@ -285,9 +329,14 @@ echo "=========================================================="
 echo "   Installation von KleinanzeigenRadar war erfolgreich!   "
 echo "=========================================================="
 echo -e "${NC}"
-echo -e "Die Anwendung laeuft im Hintergrund und ist ab sofort erreichbar unter:"
-echo -e "  -> ${GREEN}http://${LOCAL_IP}:8000${NC} oder ${GREEN}http://localhost:8000${NC}"
+echo -e "Die Anwendung laeuft und ist ab sofort erreichbar unter:"
 echo ""
-echo "Tipp: Richte in der Oberfläche (Zahnrad-Symbol) direkt deinen Telegram-Bot"
+echo -e "  🔐 ${GREEN}HTTPS:${NC} https://kleinanzeigenradar.local:${HTTPS_PORT}"
+echo -e "          https://${LOCAL_IP}:${HTTPS_PORT}"
+echo ""
+echo -e "  🌐 ${GREEN}HTTP:${NC}  http://kleinanzeigenradar.local:${HTTP_PORT}"
+echo -e "          http://${LOCAL_IP}:${HTTP_PORT}"
+echo ""
+echo "Tipp: Richte in der Web-Oberfläche (Einstellungen) direkt deinen Telegram-Bot"
 echo "ein, um sofort über passende Angebote informiert zu werden!"
 echo ""

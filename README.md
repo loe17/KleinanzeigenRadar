@@ -11,17 +11,17 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Version-0.1.2-86b817.svg" alt="Version 0.1.2">
+  <img src="https://img.shields.io/badge/Domain-kleinanzeigenradar.local-purple.svg" alt="Local Domain">
+  <img src="https://img.shields.io/badge/Sicherheit-HTTPS%20%7C%20SSL-green.svg" alt="HTTPS">
   <img src="https://img.shields.io/badge/Plattform-Linux%20%7C%20Docker-blue.svg" alt="Linux & Docker">
-  <img src="https://img.shields.io/badge/Architektur-x86__64%20%7C%20ARM64%20%7C%20ARMv7-orange.svg" alt="x86 & ARM">
   <img src="https://img.shields.io/badge/Sprachen-Deutsch%20%7C%20English-darkgreen.svg" alt="Languages">
-  <img src="https://img.shields.io/badge/Telegram-Benachrichtigung-0088cc.svg" alt="Telegram Support">
 </p>
 
 ---
 
 ## 🚀 1-Befehl-Installation (Empfohlen)
 
-Kopiere einfach diesen **einzigen Befehl** in das Terminal deines Linux-Servers oder Raspberry Pis. Das Skript prüft alle Voraussetzungen, installiert fehlende Werkzeuge (inklusive Docker & Compose, falls noch nicht vorhanden) vollautomatisch und startet die Anwendung:
+Kopiere diesen **einzigen Befehl** in das Terminal deines Linux-Servers oder Raspberry Pis. Das Skript prüft alle Voraussetzungen, installiert fehlende Werkzeuge (inklusive Docker & Compose, falls noch nicht vorhanden) vollautomatisch, sucht selbstständig freie Ports und richtet die lokale Domain sowie HTTPS ein:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/loe17/KleinanzeigenRadar/main/install.sh || wget -qO- https://raw.githubusercontent.com/loe17/KleinanzeigenRadar/main/install.sh)"
@@ -32,7 +32,9 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/loe17/KleinanzeigenRadar
 git clone https://github.com/loe17/KleinanzeigenRadar.git && cd KleinanzeigenRadar && ./install.sh
 ```
 
-Nach wenigen Augenblicken ist KleinanzeigenRadar fertig eingerichtet und direkt im Browser unter `http://deine-server-ip:8000` erreichbar!
+Nach der Installation ist KleinanzeigenRadar sofort über dein lokales Netzwerk erreichbar:
+* 🔐 **HTTPS:** `https://kleinanzeigenradar.local:8443` (oder `https://deine-server-ip:8443`)
+* 🌐 **HTTP:** `http://kleinanzeigenradar.local:8000` (oder `http://deine-server-ip:8000`)
 
 ---
 
@@ -60,6 +62,8 @@ Sobald ein passendes Angebot online geht, erhältst du sofort eine Benachrichtig
 
 Normale Suchen auf Kleinanzeigen sind oft ungenau oder verpassen Schnäppchen, weil Verkäufer wichtige Details im Text vergessen oder Tippfehler machen. **KleinanzeigenRadar** findet diese Angebote trotzdem:
 
+* **Lokale Domain & HTTPS:** Direkt im Heimnetzwerk unter `https://kleinanzeigenradar.local` mit automatisch generiertem SSL-Zertifikat erreichbar.
+* **Automatische Port-Erkennung:** Sollte ein Standardport (z. B. 8000 oder 8443) bereits durch andere Dienste belegt sein, sucht das System vollautomatisch den nächsten freien Port.
 * **Zweisprachig (DE / EN):** Vollständig auf Deutsch und Englisch nutzbar – Standard ist Deutsch, per Klick sofort umschaltbar.
 * **Gezielte Suchaufträge:** Lege beliebig viele Suchen an. Du entscheidest, ob exakt auf Groß-/Kleinschreibung geachtet werden soll und ob die gesamte Artikelbeschreibung durchsucht wird.
 * **Die Bild-Lupe (Foto-Texterkennung):** Viele Verkäufer schreiben kaum Text, stellen aber Fotos von Typenschildern, Seriennummern, Verpackungen oder Kassenbons ein. KleinanzeigenRadar liest Schriftzüge auf Fotos automatisch mit!
@@ -110,6 +114,8 @@ KleinanzeigenRadar/
 ├── app/
 │   ├── config.py           # Konfiguration, Pfade & Version 0.1.2
 │   ├── database.py         # Schnelle SQLite-Datenbank für Suchen & Treffer
+│   ├── network_utils.py    # Automatische Suche nach freien Ports & IPs
+│   ├── ssl_cert.py         # Automatische SSL-Zertifikatsgenerierung (HTTPS)
 │   ├── scraper.py          # Schonendes Kleinanzeigen-Scraping & Wortfilter
 │   ├── ocr.py              # Foto-Texterkennung (Bild-Lupe)
 │   ├── notifier.py         # Telegram- & E-Mail-Benachrichtigungen
@@ -117,14 +123,14 @@ KleinanzeigenRadar/
 │   ├── watcher.py          # Zuverlässiger Hintergrund-Wächter
 │   ├── static/             # CSS, JavaScript, i18n & SVG-Icons
 │   └── templates/          # Haupt-HTML-Oberfläche
-├── data/                   # Gespeicherte Suchen & Treffer (bleibt bei Updates erhalten)
+├── data/                   # Gespeicherte Suchen, Treffer & SSL-Zertifikate
 ├── docs/images/            # Vorschaubilder für die Dokumentation
-├── Dockerfile              # Multi-Architektur-Bauplan (x86 & ARM)
-├── docker-compose.yml      # 1-Klick Startdatei für Docker
-├── install.sh              # Automatisches Prüf- & Installationsskript
+├── Dockerfile              # Multi-Architektur-Bauplan (x86 & ARM) mit OpenSSL
+├── docker-compose.yml      # 1-Klick Startdatei mit HTTP & HTTPS Ports
+├── install.sh              # Automatisches Prüf-, Installations- & Port-Skript
 ├── uninstall.sh            # Automatisches Deinstallationsskript
 ├── requirements.txt        # Python-Bibliotheken
-├── run.py                  # Server-Startpunkt
+├── run.py                  # Dual-Server Einstiegspunkt (HTTP & HTTPS)
 └── README.md               # Diese Anleitung
 ```
 
