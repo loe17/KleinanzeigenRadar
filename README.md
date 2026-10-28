@@ -19,7 +19,24 @@
 
 ---
 
-## Einblicke in die Anwendung
+## 🚀 1-Befehl-Installation (Empfohlen)
+
+Kopiere einfach diesen **einzigen Befehl** in das Terminal deines Linux-Servers oder Raspberry Pis. Das Skript prüft alle Voraussetzungen, installiert fehlende Werkzeuge (inklusive Docker & Compose, falls noch nicht vorhanden) vollautomatisch und startet die Anwendung:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/loe17/KleinanzeigenRadar/main/install.sh || wget -qO- https://raw.githubusercontent.com/loe17/KleinanzeigenRadar/main/install.sh)"
+```
+
+*Alternativ über Git-Klon:*
+```bash
+git clone https://github.com/loe17/KleinanzeigenRadar.git && cd KleinanzeigenRadar && ./install.sh
+```
+
+Nach wenigen Augenblicken ist KleinanzeigenRadar fertig eingerichtet und direkt im Browser unter `http://deine-server-ip:8000` erreichbar!
+
+---
+
+## 📸 Einblicke in die Anwendung
 
 ### Das Dashboard
 Schlicht, fokussiert und ohne Ablenkung mit gestochen scharfen SVG-Grafiken und zweisprachiger Benutzeroberfläche (Deutsch & Englisch). Alle Treffer laufen zentral ein und lassen sich blitzschnell nach Status, Versandart oder Preisspanne filtern:
@@ -39,7 +56,7 @@ Sobald ein passendes Angebot online geht, erhältst du sofort eine Benachrichtig
 
 ---
 
-## Was kann KleinanzeigenRadar für dich tun?
+## ✨ Was kann KleinanzeigenRadar für dich tun?
 
 Normale Suchen auf Kleinanzeigen sind oft ungenau oder verpassen Schnäppchen, weil Verkäufer wichtige Details im Text vergessen oder Tippfehler machen. **KleinanzeigenRadar** findet diese Angebote trotzdem:
 
@@ -54,37 +71,7 @@ Normale Suchen auf Kleinanzeigen sind oft ungenau oder verpassen Schnäppchen, w
 
 ---
 
-## Schnellanleitung: Installation (In unter 2 Minuten)
-
-Das mitgelieferte Installationsskript prüft dein System vollautomatisch und richtet alles schlüsselfertig ein.
-
-### 1. Repository klonen & Ordner öffnen
-Öffne das Terminal auf deinem Linux-Gerät oder Server:
-
-```bash
-git clone https://github.com/loe17/KleinanzeigenRadar.git
-cd KleinanzeigenRadar
-```
-
-### 2. Installationsskript ausführen
-Mache die Skripte ausführbar und starte die automatische Einrichtung:
-
-```bash
-chmod +x install.sh uninstall.sh
-./install.sh
-```
-
-Das Skript fragt dich, welchen Modus du bevorzugst:
-* **Option 1 (Docker):** Alles startet sauber und abgeschirmt in einem Docker-Container (empfohlen für Synology NAS, Heimserver etc.).
-* **Option 2 (Nativ unter Linux):** Richtet Python, die Texterkennung und einen automatischen Hintergrunddienst (`systemd`) ein, der beim Serverstart selbstständig mitstartet.
-
-### 3. Im Browser öffnen
-Nach der Installation siehst du die fertige Adresse im Terminal (z. B. `http://deine-server-ip:8000`).
-Öffne sie einfach in deinem Webbrowser am PC, Tablet oder Smartphone!
-
----
-
-## Telegram & E-Mail einrichten
+## ⚙️ Telegram & E-Mail einrichten
 
 1. Klicke in der Web-Oberfläche unten links auf **„Einstellungen & Updates“**.
 2. **Telegram:**
@@ -97,16 +84,16 @@ Nach der Installation siehst du die fertige Adresse im Terminal (z. B. `http://d
 
 ---
 
-## Updates über GitHub
+## 🔄 Updates über GitHub
 
 * In der Web-Oberfläche unter **„Einstellungen & Updates“** kannst du jederzeit auf **„Auf Updates prüfen“** klicken.
 * Gibt es eine neue Version, klickst du auf **„Jetzt aktualisieren“** – die Anwendung holt sich die aktuellen Daten direkt von GitHub.
 
 ---
 
-## Deinstallation
+## 🗑️ Deinstallation
 
-Möchtest du die Anwendung irgendwann entfernen, genügt ein einziger Befehl:
+Möchtest du die Anwendung irgendwann entfernen, genügt ein einziger Befehl im Projektordner:
 
 ```bash
 ./uninstall.sh
@@ -116,7 +103,7 @@ Das Skript stoppt alle Dienste oder Container sauber und fragt dich, ob deine bi
 
 ---
 
-## Ordner-Struktur
+## 📁 Ordner-Struktur
 
 ```text
 KleinanzeigenRadar/
