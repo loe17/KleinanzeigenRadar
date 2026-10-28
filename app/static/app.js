@@ -615,7 +615,8 @@ async function updateLiveCountPreview() {
   if (typedVal && typedType === "include" && !allIncludeWords.some(w => w.toLowerCase() === typedVal.toLowerCase())) {
     allIncludeWords.push(typedVal);
   }
-  const queryForPreview = allIncludeWords.join(" ");
+  const rawQuery = allIncludeWords.join(" ");
+  const queryForPreview = rawQuery.replace(/[*?]+/g, " ").replace(/\s+/g, " ").trim();
 
   if (!queryForPreview) {
     box.className = "live-preview-box";

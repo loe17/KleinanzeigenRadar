@@ -175,6 +175,46 @@ def fetch_ad_details(ad_url: str, headers: Dict[str, str]) -> Tuple[str, List[st
         logger.warning(f"Fehler beim Laden der Detailseite {ad_url}: {e}")
         return "", []
 
+def compile_keyword_pattern(term: str, case_sensitive: bool = False) -> re.Pattern:
+    """Wandelt einen Such- oder Ausschlussbegriff mit optionalen Wildcards (*, ?) in ein Regex um.
+    
+    Unterstützt flexible Wortbestandteil- und Wortgrenzen-Suche:
+      *15*        -> Sucht '15' irgendwo im Wort/Text (z. B. '15Zoll', 'XPS15', '15 Zoll')
+      15*         -> Sucht '15' am Wortanfang (z. B. '15Zoll', '15cm')
+      *15         -> Sucht '15' am Wortende (z. B. 'XPS15')
+      15          -> Sucht das eigenständige Wort '15' (Wortgrenzen auf beiden Seiten)
+      *defekt*    -> Findet 'Teildefekt', 'defekt', 'Defektgerät'
+      defekt      -> Findet nur 'defekt', aber nicht 'Teildefekt'
+      Dell Lat*   -> Findet 'Dell Latitude'
+    """
+    term = term.strip()
+    if not term:
+        return re.compile(r"$^")
+    
+    starts_wild = term.startswith("*")
+    ends_wild = term.endswith("*")
+    
+    core = term.strip("*")
+    if not core:
+        return re.compile(r".*")
+        
+    prefix = "" if starts_wild else (r"\b" if core[0].isalnum() else "")
+    suffix = "" if ends_wild else (r"\b" if core[-1].isalnum() else "")
+    
+    parts = term.split("*")
+    escaped_parts = []
+    for p in parts:
+        if not p:
+            continue
+        p_esc = re.escape(p).replace(r"\?", r".")
+        p_esc = re.sub(r"\\\s+", r"\\s+", p_esc)
+        escaped_parts.append(p_esc)
+        
+    inner = r".*?".join(escaped_parts)
+    pattern_str = f"{prefix}{inner}{suffix}"
+    flags = 0 if case_sensitive else re.IGNORECASE
+    return re.compile(pattern_str, flags)
+
 def matches_keywords(
     search_criteria: Dict[str, Any],
     title: str,
@@ -186,9 +226,9 @@ def matches_keywords(
     case_sensitive = bool(search_criteria.get("case_sensitive", False))
     search_in_desc = bool(search_criteria.get("search_in_description", True))
 
-    title_check = title if case_sensitive else title.lower()
-    desc_check = (description if case_sensitive else description.lower()) if search_in_desc else ""
-    ocr_check = ocr_text if case_sensitive else ocr_text.lower()
+    title_str = title or ""
+    desc_str = (description or "") if search_in_desc else ""
+    ocr_str = ocr_text or ""
 
     terms = search_criteria.get("terms") or []
     include_words = []
@@ -214,21 +254,18 @@ def matches_keywords(
 
     # Ausschlussprüfung: Wenn irgendein Ausschlussbegriff vorkommt -> sofort verwerfen
     for word in exclude_words:
-        target = word if case_sensitive else word.lower()
-        if not target:
-            continue
-        if target in title_check or target in desc_check or target in ocr_check:
+        rx = compile_keyword_pattern(word, case_sensitive)
+        if rx.search(title_str) or (search_in_desc and rx.search(desc_str)) or rx.search(ocr_str):
             return False, f"Ausgeschlossen durch Kriterium: '{word}'"
 
     # Alle definierten Suchbegriffe müssen irgendwo vorkommen (in Titel, Beschreibung oder Bild-Text)
     match_locations = []
     for word in include_words:
-        target = word if case_sensitive else word.lower()
-        if not target:
-            continue
-        in_title = target in title_check
-        in_desc = target in desc_check if search_in_desc else False
-        in_ocr = target in ocr_check
+        rx = compile_keyword_pattern(word, case_sensitive)
+        in_title = bool(rx.search(title_str))
+        in_desc = bool(rx.search(desc_str)) if search_in_desc else False
+        in_ocr = bool(rx.search(ocr_str))
+
         if in_title or in_desc or in_ocr:
             locs = []
             if in_title: locs.append("Titel")
@@ -350,16 +387,24 @@ def scrape_search(search: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     search_queries = []
     if include_terms:
-        # 1. Hauptabfrage mit allen Begriffen kombiniert (z. B. "Dell Latitude 3510")
-        combined = " ".join(include_terms)
-        search_queries.append(combined)
+        # Für die Kleinanzeigen-Such-URL bereinigen wir Wildcards (*, ?), damit Kleinanzeigen
+        # sauber nach dem Kernbegriff sucht
+        clean_terms = [re.sub(r"[*?]+", "", it).strip() for it in include_terms]
+        clean_terms = [t for t in clean_terms if t]
 
-        # 2. Wenn Foto-Texterkennung aktiv ist und mehrere Begriffe existieren,
-        #    auch die einzelnen Begriffe abfragen, falls ein Begriff nur auf dem Typenschild-Foto steht
-        if search.get("ocr_images") and len(include_terms) > 1:
-            for it in include_terms:
-                if it not in search_queries:
-                    search_queries.append(it)
+        if clean_terms:
+            # 1. Hauptabfrage mit allen Begriffen kombiniert (z. B. "Dell Latitude 15")
+            combined = " ".join(clean_terms)
+            search_queries.append(combined)
+
+            # 2. Wenn Foto-Texterkennung aktiv ist und mehrere Begriffe existieren,
+            #    auch die einzelnen Begriffe abfragen, falls ein Begriff nur auf dem Typenschild-Foto steht
+            if search.get("ocr_images") and len(clean_terms) > 1:
+                for it in clean_terms:
+                    if it not in search_queries:
+                        search_queries.append(it)
+        else:
+            search_queries = [""]
     else:
         search_queries = [""]
     all_matched = {}

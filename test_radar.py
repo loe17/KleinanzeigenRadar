@@ -265,12 +265,69 @@ class TestKleinanzeigenRadar(unittest.TestCase):
         self.assertFalse(matched_neg)
         self.assertIn("Ausgeschlossen", reason_neg)
 
+        # 5. Wildcard matching inside words (*15* vs 15 vs 15*)
+        search_wildcard = {
+            "terms": [
+                {"text": "Latitude", "type": "include"},
+                {"text": "*15*", "type": "include"}
+            ],
+            "case_sensitive": False,
+            "search_in_description": True
+        }
+        # Matches '15Zoll' inside title
+        m1, _ = matches_keywords(search_wildcard, "Dell Latitude 15Zoll", "", "")
+        self.assertTrue(m1)
+
+        # Matches 'XPS15' inside title
+        m2, _ = matches_keywords(search_wildcard, "Dell Latitude XPS15", "", "")
+        self.assertTrue(m2)
+
+        # Exact word '15' does NOT match '15Zoll' or '2015'
+        search_exact = {
+            "terms": [
+                {"text": "Latitude", "type": "include"},
+                {"text": "15", "type": "include"}
+            ],
+            "case_sensitive": False,
+            "search_in_description": True
+        }
+        m3, _ = matches_keywords(search_exact, "Dell Latitude 15Zoll", "", "")
+        self.assertFalse(m3)
+        m4, _ = matches_keywords(search_exact, "Dell Latitude 15 Zoll", "", "")
+        self.assertTrue(m4)
+
+        # Prefix wildcard '15*' matches '15Zoll' but not 'XPS15'
+        search_prefix = {
+            "terms": [
+                {"text": "Latitude", "type": "include"},
+                {"text": "15*", "type": "include"}
+            ],
+            "case_sensitive": False,
+            "search_in_description": True
+        }
+        m5, _ = matches_keywords(search_prefix, "Dell Latitude 15Zoll", "", "")
+        self.assertTrue(m5)
+        m6, _ = matches_keywords(search_prefix, "Dell Latitude XPS15", "", "")
+        self.assertFalse(m6)
+
+        # Wildcard exclusion (-*defekt* excludes 'Teildefekt')
+        search_wild_ex = {
+            "terms": [
+                {"text": "Latitude", "type": "include"},
+                {"text": "*defekt*", "type": "exclude"}
+            ],
+            "case_sensitive": False,
+            "search_in_description": True
+        }
+        m7, _ = matches_keywords(search_wild_ex, "Dell Latitude", "Teildefekt fuer Bastler", "")
+        self.assertFalse(m7)
+
     def test_updater_module(self):
         from app.config import VERSION
-        self.assertEqual(VERSION, "0.1.6")
+        self.assertEqual(VERSION, "0.1.7")
         update_info = check_for_github_update()
         self.assertIn("current_version", update_info)
-        self.assertEqual(update_info["current_version"], "0.1.6")
+        self.assertEqual(update_info["current_version"], "0.1.7")
 
 if __name__ == "__main__":
     unittest.main()
