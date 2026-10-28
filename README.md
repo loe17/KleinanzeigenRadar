@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-0.1.4-86b817.svg" alt="Version 0.1.4">
+  <img src="https://img.shields.io/badge/Version-0.1.5-86b817.svg" alt="Version 0.1.5">
   <img src="https://img.shields.io/badge/Domain-kleinanzeigenradar.local-purple.svg" alt="Local Domain">
   <img src="https://img.shields.io/badge/Sicherheit-HTTPS%20%7C%20SSL-green.svg" alt="HTTPS">
   <img src="https://img.shields.io/badge/Plattform-Linux%20%7C%20Docker-blue.svg" alt="Linux & Docker">
@@ -114,7 +114,7 @@ Das Skript stoppt alle Dienste oder Container sauber und fragt dich, ob deine bi
 ```text
 KleinanzeigenRadar/
 ├── app/
-│   ├── config.py           # Konfiguration, Pfade & Version 0.1.4
+│   ├── config.py           # Konfiguration, Pfade & Version 0.1.5
 │   ├── database.py         # Schnelle SQLite-Datenbank für Suchen & Treffer
 │   ├── network_utils.py    # Automatische Suche nach freien Ports & IPs
 │   ├── ssl_cert.py         # Automatische SSL-Zertifikatsgenerierung (HTTPS)

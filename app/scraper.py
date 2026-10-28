@@ -143,7 +143,7 @@ def parse_price(price_str: str) -> Optional[float]:
 def fetch_ad_details(ad_url: str, headers: Dict[str, str]) -> Tuple[str, List[str]]:
     """Ruft die Detailseite einer Anzeige ab für vollständige Beschreibung und hochauflösende Bilder."""
     try:
-        time.sleep(random.uniform(0.6, 1.4))  # Schonende Pause
+        time.sleep(random.uniform(0.1, 0.25))  # Kurze Pause
         resp = requests.get(ad_url, headers=headers, timeout=10)
         if resp.status_code != 200:
             return "", []
@@ -404,24 +404,44 @@ def scrape_search(search: Dict[str, Any]) -> List[Dict[str, Any]]:
             all_images = [ad["thumbnail"]] if ad["thumbnail"] else []
             ocr_text = ""
 
-            need_details = search.get("search_in_description") or search.get("ocr_images")
-            if need_details and ad["url"]:
+            # 1. Schnelle Vorprüfung mit den bereits vorhandenen Daten der Suchergebnisseite
+            is_match, reason = matches_keywords(
+                search_criteria=search,
+                title=ad["title"],
+                description=full_description,
+                ocr_text="",
+                matched_term=query_term
+            )
+
+            # 2. Falls durch Ausschlusskriterium im Titel/Text verworfen -> sofort überspringen
+            if not is_match and "Ausgeschlossen" in reason:
+                continue
+
+            # 3. Falls noch kein Treffer, aber Volltextsuche gewünscht ist -> Detailseite abrufen
+            if not is_match and search.get("search_in_description") and ad["url"]:
                 detailed_desc, detailed_images = fetch_ad_details(ad["url"], DEFAULT_HEADERS)
                 if detailed_desc:
                     full_description = detailed_desc
                 if detailed_images:
                     all_images = detailed_images
+                is_match, reason = matches_keywords(
+                    search_criteria=search,
+                    title=ad["title"],
+                    description=full_description,
+                    ocr_text="",
+                    matched_term=query_term
+                )
 
-            if search.get("ocr_images") and all_images:
+            # 4. Falls immer noch kein Treffer, aber Foto-Texterkennung aktiv ist -> OCR ausführen
+            if not is_match and search.get("ocr_images") and all_images:
                 ocr_text = analyze_listing_images(all_images, max_images=3)
-
-            is_match, reason = matches_keywords(
-                search_criteria=search,
-                title=ad["title"],
-                description=full_description,
-                ocr_text=ocr_text,
-                matched_term=query_term
-            )
+                is_match, reason = matches_keywords(
+                    search_criteria=search,
+                    title=ad["title"],
+                    description=full_description,
+                    ocr_text=ocr_text,
+                    matched_term=query_term
+                )
 
             if not is_match:
                 continue

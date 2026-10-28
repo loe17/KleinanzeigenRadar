@@ -181,10 +181,10 @@ class TestKleinanzeigenRadar(unittest.TestCase):
 
     def test_updater_module(self):
         from app.config import VERSION
-        self.assertEqual(VERSION, "0.1.4")
+        self.assertEqual(VERSION, "0.1.5")
         update_info = check_for_github_update()
         self.assertIn("current_version", update_info)
-        self.assertEqual(update_info["current_version"], "0.1.4")
+        self.assertEqual(update_info["current_version"], "0.1.5")
 
 if __name__ == "__main__":
     unittest.main()

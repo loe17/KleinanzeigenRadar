@@ -140,11 +140,13 @@ async def api_get_search(search_id: int):
     return search
 
 @app.put("/api/searches/{search_id}")
-async def api_update_search(search_id: int, data: SearchCreateUpdate):
+async def api_update_search(search_id: int, data: SearchCreateUpdate, bg: BackgroundTasks):
     search = get_search(search_id)
     if not search:
         raise HTTPException(status_code=404, detail="Suchauftrag nicht gefunden")
     update_search(search_id, data.model_dump())
+    # Direkt Suche im Hintergrund mit den neuen Kriterien ausführen
+    bg.add_task(watcher_service.execute_search_now, search_id)
     return {"success": True}
 
 @app.delete("/api/searches/{search_id}")

@@ -114,6 +114,14 @@ async function initApp() {
   await loadSearches();
   await loadResults();
   loadStats();
+
+  if (allSearches.length > 0 && allResults.length === 0) {
+    setTimeout(async () => {
+      await loadSearches(false);
+      await loadResults(false);
+      loadStats();
+    }, 2500);
+  }
 }
 
 function setupEventListeners() {
@@ -131,10 +139,20 @@ function setupEventListeners() {
 
   // Buttons
   document.getElementById("btn-add-search").addEventListener("click", () => openSearchModal());
-  document.getElementById("btn-refresh-results").addEventListener("click", () => {
-    loadSearches();
-    loadResults();
-    showToast(t("toast_refresh"), "success");
+  document.getElementById("btn-refresh-results").addEventListener("click", async () => {
+    if (activeSearchId) {
+      showToast(t("toast_search_triggered"), "info");
+      try {
+        await fetch(`/api/searches/${activeSearchId}/run`, { method: "POST" });
+        pollForResults(activeSearchId);
+      } catch (err) {
+        showToast("Error", "error");
+      }
+    } else {
+      loadSearches();
+      loadResults();
+      showToast(t("toast_refresh"), "success");
+    }
   });
   document.getElementById("btn-mark-all-read").addEventListener("click", markAllAsRead);
   document.getElementById("btn-open-settings").addEventListener("click", openSettingsModal);
@@ -190,19 +208,11 @@ function setupEventListeners() {
 
 // --- Navigation & Filter Handhabung ---
 
-function setNavFilter(status, searchId) {
-  activeStatus = status;
-  activeSearchId = searchId;
-
-  // Aktive Klassen im Menü aktualisieren
-  document.querySelectorAll(".nav-item").forEach(item => item.classList.remove("active"));
-  
-  if (searchId) {
-    const el = document.getElementById(`search-nav-${searchId}`);
-    if (el) el.classList.add("active");
-    const s = allSearches.find(x => x.id === searchId);
-    document.getElementById("header-title").innerText = s ? s.name : t("nav_searches");
+function updateHeaderInfo() {
+  if (activeSearchId) {
+    const s = allSearches.find(x => x.id === activeSearchId);
     if (s) {
+      document.getElementById("header-title").innerText = s.name;
       const created = s.created_at_formatted || "-";
       const lastRun = s.last_run_formatted || t("lbl_never_checked");
       const termsDesc = (s.terms && s.terms.length > 0)
@@ -217,12 +227,27 @@ function setNavFilter(status, searchId) {
       document.getElementById("header-desc").innerText = "";
     }
   } else {
+    document.getElementById("header-title").innerText = t(`header_${activeStatus}_title`);
+    document.getElementById("header-desc").innerText = t(`header_${activeStatus}_desc`);
+  }
+}
+
+function setNavFilter(status, searchId) {
+  activeStatus = status;
+  activeSearchId = searchId;
+
+  // Aktive Klassen im Menü aktualisieren
+  document.querySelectorAll(".nav-item").forEach(item => item.classList.remove("active"));
+  
+  if (searchId) {
+    const el = document.getElementById(`search-nav-${searchId}`);
+    if (el) el.classList.add("active");
+  } else {
     const el = document.getElementById(`nav-${status}`);
     if (el) el.classList.add("active");
-    document.getElementById("header-title").innerText = t(`header_${status}_title`);
-    document.getElementById("header-desc").innerText = t(`header_${status}_desc`);
   }
 
+  updateHeaderInfo();
   loadResults();
 }
 
@@ -233,6 +258,7 @@ async function loadSearches(showSpinner = true) {
     const res = await fetch("/api/searches");
     allSearches = await res.json();
     renderSearchesList();
+    updateHeaderInfo(); // Aktualisiert Kopfzeile unmittelbar mit neuem Namen, Begriffen & Zeitstempel
   } catch (err) {
     console.error("Fehler beim Laden der Suchen:", err);
   }
@@ -691,15 +717,26 @@ async function editSearch(event, id) {
   if (s) openSearchModal(s);
 }
 
+function pollForResults(searchId) {
+  let attempts = 0;
+  const maxAttempts = 10;
+  const interval = setInterval(async () => {
+    attempts++;
+    await loadSearches(false);
+    await loadResults(false);
+    loadStats();
+    if (allResults.length > 0 || attempts >= maxAttempts) {
+      clearInterval(interval);
+    }
+  }, 1500);
+}
+
 async function runSearchNow(event, id) {
   event.stopPropagation();
   showToast(t("toast_search_triggered"), "success");
   try {
     await fetch(`/api/searches/${id}/run`, { method: "POST" });
-    setTimeout(() => {
-      loadResults(false);
-      loadStats();
-    }, 3000);
+    pollForResults(id);
   } catch (err) {
     showToast("Error", "error");
   }
@@ -762,6 +799,7 @@ async function handleSearchFormSubmit(e) {
   };
 
   try {
+    let targetSearchId = id;
     if (id) {
       await fetch(`/api/searches/${id}`, {
         method: "PUT",
@@ -770,17 +808,24 @@ async function handleSearchFormSubmit(e) {
       });
       showToast(t("toast_search_saved"), "success");
     } else {
-      await fetch("/api/searches", {
+      const res = await fetch("/api/searches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
+      const data = await res.json();
+      targetSearchId = data.id;
       showToast(t("toast_search_created"), "success");
     }
 
     closeModal("modal-search");
-    loadSearches();
-    loadResults();
+    await loadSearches();
+    if (targetSearchId) {
+      setNavFilter(null, parseInt(targetSearchId));
+      pollForResults(parseInt(targetSearchId));
+    } else {
+      loadResults();
+    }
   } catch (err) {
     showToast("Error saving monitor", "error");
   }

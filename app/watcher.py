@@ -9,7 +9,8 @@ from app.database import (
     get_search,
     update_search_last_run,
     save_result,
-    get_settings
+    get_settings,
+    get_stats
 )
 from app.scraper import scrape_search
 from app.notifier import send_telegram_notification, send_email_notification
@@ -51,6 +52,8 @@ class SearchWatcher:
     def _check_due_searches(self):
         searches = get_all_searches(active_only=True)
         now = datetime.now()
+        stats = get_stats()
+        has_zero_results = stats.get("total_results", 0) == 0
 
         for s in searches:
             if self._stop_event.is_set():
@@ -60,7 +63,7 @@ class SearchWatcher:
             last_run_str = s.get("last_run")
 
             is_due = False
-            if not last_run_str:
+            if not last_run_str or has_zero_results:
                 is_due = True
             else:
                 try:
