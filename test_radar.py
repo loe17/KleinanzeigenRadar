@@ -353,6 +353,43 @@ class TestKleinanzeigenRadar(unittest.TestCase):
         m12, _ = matches_keywords(search_unit_norm, "Lenovo Laptop 16 GB", "", "")
         self.assertTrue(m12)
 
+        # Screen size matching: 15*" or 15" matches 15,6 Zoll, 15 Zoll, 15", 15,6", 15-Zoll, 15 inch
+        search_screen = {
+            "terms": [
+                {"text": "Laptop", "type": "include"},
+                {"text": '15*"', "type": "include"}
+            ],
+            "case_sensitive": False,
+            "search_in_description": True
+        }
+        m13, _ = matches_keywords(search_screen, "Laptop 15,6 Zoll 16GB", "", "")
+        self.assertTrue(m13)
+        m14, _ = matches_keywords(search_screen, "Laptop 15 Zoll", "", "")
+        self.assertTrue(m14)
+        m15, _ = matches_keywords(search_screen, "Laptop 15,6\"", "", "")
+        self.assertTrue(m15)
+        m16, _ = matches_keywords(search_screen, "Dell Latitude 15-Zoll", "Top Laptop", "")
+        self.assertTrue(m16)
+
+        # Synonym matching: Laptop matches Notebook
+        search_synonym = {
+            "terms": [
+                {"text": "Laptop", "type": "include"}
+            ],
+            "case_sensitive": False,
+            "search_in_description": True
+        }
+        m17, _ = matches_keywords(search_synonym, "Gebrauchtes Notebook", "", "")
+        self.assertTrue(m17)
+
+    def test_search_url_pagination(self):
+        from app.scraper import build_search_url_for_query
+        url_p1 = build_search_url_for_query("Laptop", max_price=250, page=1)
+        self.assertNotIn("seite:", url_p1)
+        url_p2 = build_search_url_for_query("Laptop", max_price=250, page=2)
+        self.assertIn("seite:2", url_p2)
+        self.assertIn("preis::250", url_p2)
+
     def test_scan_progress_tracking(self):
         from app.watcher import get_scan_progress, set_scan_progress
         # Default empty progress
@@ -438,10 +475,10 @@ class TestKleinanzeigenRadar(unittest.TestCase):
 
     def test_updater_module(self):
         from app.config import VERSION
-        self.assertEqual(VERSION, "0.1.9")
+        self.assertEqual(VERSION, "0.2.0")
         update_info = check_for_github_update()
         self.assertIn("current_version", update_info)
-        self.assertEqual(update_info["current_version"], "0.1.9")
+        self.assertEqual(update_info["current_version"], "0.2.0")
 
 if __name__ == "__main__":
     unittest.main()

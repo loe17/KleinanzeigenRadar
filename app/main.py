@@ -188,12 +188,22 @@ async def api_get_results(
     sort_by: Optional[str] = "newest",
     limit: int = 150
 ):
+    effective_min = min_price
+    effective_max = max_price
+    if search_id:
+        s = get_search(search_id)
+        if s:
+            if effective_min is None and s.get("min_price") is not None:
+                effective_min = s["min_price"]
+            if effective_max is None and s.get("max_price") is not None:
+                effective_max = s["max_price"]
+
     return get_results(
         search_id=search_id,
         status=status,
         shipping_filter=shipping_filter,
-        min_price=min_price,
-        max_price=max_price,
+        min_price=effective_min,
+        max_price=effective_max,
         search_term=search_term,
         sort_by=sort_by or "newest",
         limit=limit

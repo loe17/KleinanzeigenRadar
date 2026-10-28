@@ -228,17 +228,32 @@ function updateHeaderInfo() {
       const termsDesc = (s.terms && s.terms.length > 0)
         ? s.terms.map(t => (t.type === 'exclude' ? `-${t.text}` : `+${t.text}`)).join(", ")
         : (s.query || "");
+      const priceDesc = (s.min_price && s.max_price)
+        ? `${s.min_price} € - ${s.max_price} €`
+        : (s.max_price ? `bis ${s.max_price} €` : (s.min_price ? `ab ${s.min_price} €` : ""));
+
       document.getElementById("header-desc").innerHTML = `
         <span><b>${t('lbl_created_at')}</b> ${escapeHtml(created)}</span> &bull; 
         <span><b>${t('lbl_last_checked')}</b> ${escapeHtml(lastRun)}</span>
         ${termsDesc ? ` &bull; <span><b>Begriffe:</b> ${escapeHtml(termsDesc)}</span>` : ''}
+        ${priceDesc ? ` &bull; <span><b>Preis:</b> ${escapeHtml(priceDesc)}</span>` : ''}
       `;
+
+      const fMin = document.getElementById("filter-min-price");
+      if (fMin) fMin.placeholder = s.min_price ? `Min ${s.min_price} €` : (t("filter_min_price") || "Min €");
+      const fMax = document.getElementById("filter-max-price");
+      if (fMax) fMax.placeholder = s.max_price ? `Max ${s.max_price} €` : (t("filter_max_price") || "Max €");
     } else {
       document.getElementById("header-desc").innerText = "";
     }
   } else {
     document.getElementById("header-title").innerText = t(`header_${activeStatus}_title`);
     document.getElementById("header-desc").innerText = t(`header_${activeStatus}_desc`);
+
+    const fMin = document.getElementById("filter-min-price");
+    if (fMin) fMin.placeholder = t("filter_min_price") || "Min €";
+    const fMax = document.getElementById("filter-max-price");
+    if (fMax) fMax.placeholder = t("filter_max_price") || "Max €";
   }
 }
 

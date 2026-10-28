@@ -41,7 +41,8 @@ def build_search_url_for_query(
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
     postal_code: str = "",
-    radius: int = 0
+    radius: int = 0,
+    page: int = 1
 ) -> str:
     """Baut eine moderne SEO-URL für Kleinanzeigen basierend auf Parametern."""
     parts = []
@@ -53,6 +54,10 @@ def build_search_url_for_query(
         min_s = str(int(float(min_price))) if has_min else ""
         max_s = str(int(float(max_price))) if has_max else ""
         parts.append(f"preis:{min_s}:{max_s}")
+
+    # Seitenzahl (für Pagination)
+    if page and int(page) > 1:
+        parts.append(f"seite:{int(page)}")
 
     # PLZ & Umkreis
     plz_clean = str(postal_code).strip() if postal_code else ""
@@ -186,11 +191,11 @@ def fetch_ad_details(ad_url: str, headers: Dict[str, str]) -> Tuple[str, List[st
 def compile_keyword_pattern(term: str, case_sensitive: bool = False) -> re.Pattern:
     """Wandelt einen Such- oder Ausschlussbegriff mit optionalen Wildcards (*, ?) in ein Regex um.
     
-    Unterstützt flexible Wortbestandteil- und Wortgrenzen-Suche:
+    Unterstützt flexible Wortbestandteil-, Einheiten- und Wortgrenzen-Suche:
       *15*        -> Sucht '15' irgendwo im Wort/Text (z. B. '15Zoll', 'XPS15', '15 Zoll')
       15*         -> Sucht '15' am Wortanfang (z. B. '15Zoll', '15cm')
-      *15         -> Sucht '15' am Wortende (z. B. 'XPS15')
-      15          -> Sucht das eigenständige Wort '15' (Wortgrenzen auf beiden Seiten)
+      15*" / 15"  -> Erkennt 15 Zoll / 15 inch flexibel ('15,6 Zoll', '15 Zoll', '15,6"', '15"', '15-Zoll', '15 inch')
+      Laptop      -> Findet sowohl 'Laptop' als auch das deutsche Synonym 'Notebook'
       *16*GB      -> Findet '16GB', '16 GB', '16-GB', 'RAM: 16 GB', '16 GB RAM'
       16GB / 16 GB-> Automatische Toleranz für optionale Leerzeichen zwischen Zahl & Einheit
       *defekt*    -> Findet 'Teildefekt', 'defekt', 'Defektgerät'
@@ -200,29 +205,47 @@ def compile_keyword_pattern(term: str, case_sensitive: bool = False) -> re.Patte
     term = term.strip()
     if not term:
         return re.compile(r"$^")
-    
+
+    t_clean = term.lower().strip()
+    # 1. Synonym-Erkennung für Laptop / Notebook im deutschen Sprachgebrauch
+    if t_clean in ("laptop", "laptops"):
+        return re.compile(r"\b(?:laptop|notebook)s?\b", 0 if case_sensitive else re.IGNORECASE)
+    if t_clean in ("notebook", "notebooks"):
+        return re.compile(r"\b(?:notebook|laptop)s?\b", 0 if case_sensitive else re.IGNORECASE)
+
+    # 2. Displaygrößen-Erkennung mit Zoll/Inch/Anführungszeichen (z. B. 15*", 15", 15 Zoll, 14", 17")
+    m_inch = re.match(r"^\*?(\d+)(?:[,.]\d+)?\s*(?:\*|\.\*|\.{0,15}\?)?\s*(?:\"|\'\'|“|”|zoll|inch)\*?$", term, re.IGNORECASE)
+    if m_inch:
+        num = m_inch.group(1)
+        p_pre = "" if term.startswith("*") else r"\b"
+        # Matcht z. B. 15,6 Zoll, 15 Zoll, 15", 15,6", 15.6", 15-Zoll, 15 inch
+        pattern_str = rf"{p_pre}{num}(?:[,.]\d+)?\s*(?:\"|\'\'|“|”|zoll|inch|\b)"
+        return re.compile(pattern_str, 0 if case_sensitive else re.IGNORECASE)
+
     starts_wild = term.startswith("*")
     ends_wild = term.endswith("*")
-    
+
     core = term.strip("*")
     if not core:
         return re.compile(r".*")
-        
+
     prefix = "" if starts_wild else (r"\b" if core[0].isalnum() else "")
     suffix = "" if ends_wild else (r"\b" if core[-1].isalnum() else "")
-    
+
     parts = term.split("*")
     escaped_parts = []
     for p in parts:
         if not p:
             continue
         p_esc = re.escape(p).replace(r"\?", r".")
+        # Anführungszeichen als Zoll/Inch tolerieren
+        p_esc = re.sub(r'\\"', r'(?:\\"|\'\'|“|”|zoll|inch|\\b)', p_esc)
         # Automatische Toleranz für optionale Leerzeichen zwischen Zahlen und Einheiten (z. B. 16GB -> 16\s*GB)
         p_esc = re.sub(r"(\d+)\\?([a-zA-Z]+)", r"\1\\s*\2", p_esc)
         p_esc = re.sub(r"(\d+)\\\s+([a-zA-Z]+)", r"\1\\s*\2", p_esc)
         p_esc = re.sub(r"\\\s+", r"\\s+", p_esc)
         escaped_parts.append(p_esc)
-        
+
     inner = r".{0,15}?".join(escaped_parts)
     pattern_str = f"{prefix}{inner}{suffix}"
     flags = 0 if case_sensitive else re.IGNORECASE
@@ -458,27 +481,34 @@ def scrape_search(
         on_progress(10, f"Frage Kleinanzeigen nach '{display_q}' ab...", 0, 0)
 
     for query_term in search_queries:
-        url = build_search_url_for_query(
-            query=query_term,
-            min_price=search.get("min_price"),
-            max_price=search.get("max_price"),
-            postal_code=search.get("postal_code", ""),
-            radius=search.get("radius", 0)
-        )
-        logger.info(f"Suche '{search.get('name')}' - Abruf Begriff '{query_term}' unter: {url}")
+        parsed_items = []
+        max_pages = 2
+        for page_num in range(1, max_pages + 1):
+            url = build_search_url_for_query(
+                query=query_term,
+                min_price=search.get("min_price"),
+                max_price=search.get("max_price"),
+                postal_code=search.get("postal_code", ""),
+                radius=search.get("radius", 0),
+                page=page_num
+            )
+            logger.info(f"Suche '{search.get('name')}' - Abruf Begriff '{query_term}' (Seite {page_num}): {url}")
 
-        try:
-            resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=12)
-            if resp.status_code != 200:
-                logger.warning(f"Kleinanzeigen antwortete mit Status {resp.status_code} für '{query_term}'")
-                continue
+            try:
+                resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=12)
+                if resp.status_code != 200:
+                    logger.warning(f"Kleinanzeigen antwortete mit Status {resp.status_code} für '{query_term}' Seite {page_num}")
+                    break
 
-            soup = BeautifulSoup(resp.text, "html.parser")
-            parsed_items = parse_articles_from_soup(soup)
-            logger.info(f"Gefundene Anzeigen auf Seite für '{query_term}': {len(parsed_items)}")
-        except Exception as e:
-            logger.error(f"Fehler bei Anfrage an Kleinanzeigen für '{query_term}': {e}")
-            continue
+                soup = BeautifulSoup(resp.text, "html.parser")
+                page_items = parse_articles_from_soup(soup)
+                logger.info(f"Gefundene Anzeigen auf Seite {page_num} für '{query_term}': {len(page_items)}")
+                parsed_items.extend(page_items)
+                if len(page_items) < 15:
+                    break
+            except Exception as e:
+                logger.error(f"Fehler bei Anfrage an Kleinanzeigen für '{query_term}' Seite {page_num}: {e}")
+                break
 
         total_items = len(parsed_items)
         if on_progress:
