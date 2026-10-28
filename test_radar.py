@@ -382,6 +382,80 @@ class TestKleinanzeigenRadar(unittest.TestCase):
         m17, _ = matches_keywords(search_synonym, "Gebrauchtes Notebook", "", "")
         self.assertTrue(m17)
 
+        # ODER-Syntax (|) Tests:
+        # 1. Beliebige Gegenstände: Sofa | Couch
+        search_or_furniture = {
+            "terms": [
+                {"text": "Sofa | Couch", "type": "include"}
+            ],
+            "case_sensitive": False,
+            "search_in_description": True
+        }
+        m18, r18 = matches_keywords(search_or_furniture, "Gemütliches Sofa in Berlin", "", "")
+        self.assertTrue(m18)
+        self.assertIn("Sofa", r18)
+        m19, r19 = matches_keywords(search_or_furniture, "Schöne Couch abzugeben", "", "")
+        self.assertTrue(m19)
+        self.assertIn("Couch", r19)
+        m20, _ = matches_keywords(search_or_furniture, "Küchentisch aus Holz", "", "")
+        self.assertFalse(m20)
+
+        # ODER mit Wildcard: Sofa | *couch* findet auch Eckcouch
+        search_or_wild = {
+            "terms": [
+                {"text": "Sofa | *couch*", "type": "include"}
+            ],
+            "case_sensitive": False,
+            "search_in_description": True
+        }
+        m_wild, r_wild = matches_keywords(search_or_wild, "Schöne Eckcouch abzugeben", "", "")
+        self.assertTrue(m_wild)
+        self.assertIn("couch", r_wild.lower())
+
+        # 2. Kombination: ODER-Begriff UND Einheitenbegriff
+        search_or_combo = {
+            "terms": [
+                {"text": "Laptop | Notebook", "type": "include"},
+                {"text": "*16*GB", "type": "include"}
+            ],
+            "case_sensitive": False,
+            "search_in_description": True
+        }
+        m21, _ = matches_keywords(search_or_combo, "HP Laptop 16GB RAM", "", "")
+        self.assertTrue(m21)
+        m22, _ = matches_keywords(search_or_combo, "Dell Notebook 16 GB", "", "")
+        self.assertTrue(m22)
+        m23, _ = matches_keywords(search_or_combo, "Dell Notebook 8 GB", "", "")
+        self.assertFalse(m23)  # Fehlt 16GB
+
+        # 3. Ausschluss mit ODER: defekt | schaden
+        search_or_exclude = {
+            "terms": [
+                {"text": "Laptop", "type": "include"},
+                {"text": "defekt | schaden", "type": "exclude"}
+            ],
+            "case_sensitive": False,
+            "search_in_description": True
+        }
+        m24, _ = matches_keywords(search_or_exclude, "Laptop voll funktionsfähig", "", "")
+        self.assertTrue(m24)
+        m25, _ = matches_keywords(search_or_exclude, "Laptop leider defekt", "", "")
+        self.assertFalse(m25)
+        m26, _ = matches_keywords(search_or_exclude, "Laptop mit Schaden", "", "")
+        self.assertFalse(m26)
+
+        # Ausschluss mit ODER und Wildcard: defekt | *schaden* schließt auch Gehäuseschaden aus
+        search_or_exclude_wild = {
+            "terms": [
+                {"text": "Laptop", "type": "include"},
+                {"text": "defekt | *schaden*", "type": "exclude"}
+            ],
+            "case_sensitive": False,
+            "search_in_description": True
+        }
+        m27, _ = matches_keywords(search_or_exclude_wild, "Laptop mit Gehäuseschaden", "", "")
+        self.assertFalse(m27)
+
     def test_search_url_pagination(self):
         from app.scraper import build_search_url_for_query
         url_p1 = build_search_url_for_query("Laptop", max_price=250, page=1)
@@ -389,6 +463,13 @@ class TestKleinanzeigenRadar(unittest.TestCase):
         url_p2 = build_search_url_for_query("Laptop", max_price=250, page=2)
         self.assertIn("seite:2", url_p2)
         self.assertIn("preis::250", url_p2)
+
+    def test_search_queries_with_or_syntax(self):
+        from app.scraper import fetch_live_result_count
+        # Test that OR in preview count splits and queries both alternatives
+        # (Mocking build_search_url_for_query isn't needed, but testing that | doesn't crash)
+        count = fetch_live_result_count("Laptop | Notebook", max_price=250)
+        self.assertIsInstance(count, int)
 
     def test_scan_progress_tracking(self):
         from app.watcher import get_scan_progress, set_scan_progress
@@ -475,10 +556,10 @@ class TestKleinanzeigenRadar(unittest.TestCase):
 
     def test_updater_module(self):
         from app.config import VERSION
-        self.assertEqual(VERSION, "0.2.0")
+        self.assertEqual(VERSION, "0.2.1")
         update_info = check_for_github_update()
         self.assertIn("current_version", update_info)
-        self.assertEqual(update_info["current_version"], "0.2.0")
+        self.assertEqual(update_info["current_version"], "0.2.1")
 
 if __name__ == "__main__":
     unittest.main()

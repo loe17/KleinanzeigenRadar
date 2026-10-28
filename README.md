@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-0.2.0-86b817.svg" alt="Version 0.2.0">
+  <img src="https://img.shields.io/badge/Version-0.2.1-86b817.svg" alt="Version 0.2.1">
   <img src="https://img.shields.io/badge/Domain-kleinanzeigenradar.local-purple.svg" alt="Local Domain">
   <img src="https://img.shields.io/badge/Sicherheit-HTTPS%20%7C%20SSL-green.svg" alt="HTTPS">
   <img src="https://img.shields.io/badge/Plattform-Linux%20%7C%20Docker-blue.svg" alt="Linux & Docker">
@@ -66,6 +66,8 @@ Normale Suchen auf Kleinanzeigen sind oft ungenau oder verpassen Schnäppchen, w
 * **Automatische Port-Erkennung:** Sollte ein Standardport (z. B. 8000 oder 8443) bereits durch andere Dienste belegt sein, sucht das System vollautomatisch den nächsten freien Port.
 * **Live-Suchfortschritt & Ladeleiste:** Bei jedem manuellen Start oder Aktualisieren eines Suchauftrags visualisiert ein animierter Ladebalken (0–100%) über der Trefferliste den aktuellen Status, den Fortschritt und die Anzahl gefundener Inserate in Echtzeit.
 * **Echtzeit-Treffer-Streaming:** Gefundene Inserate werden sofort beim Erkennen einzeln in der Datenbank gesichert und erscheinen ohne Wartezeit direkt live auf deiner Oberfläche.
+* **ODER-Syntax (|) für flexible Alternativen:** Mit dem senkrechten Strich (`|`) kannst du beliebig viele Synonyme und Varianten in einem Begriff definieren (z. B. `Laptop | Notebook`, `Sofa | Couch`, `15*" | 17*"` oder `defekt | schaden`). Mindestens einer der Begriffe genügt für einen Treffer.
+* **Interaktive Such-Infobox mit Beispielen (i):** Ein Klick auf das dezente (i)-Symbol im Suchauftrags-Fenster öffnet eine übersichtliche Anleitung mit praxisnahen Beispielen für ODER-Verknüpfungen, Joker-Sterne, Maßeinheiten und Ausschlussbegriffe.
 * **Erweiterte Teilwort- & Einheitensuche (`*16*GB`):** Intelligente Wortteil-Suche mit automatischer Leerzeichen- und Einheitentoleranz. Suchbegriffe wie `*16*GB` finden `16GB`, `16 GB`, `16-GB`, `RAM: 16 GB` und `16 GB RAM` gleichermaßen.
 * **Intelligente Displaygrößen-Erkennung (`15*"`, `15"`, `Zoll`, `Inch`):** Suchst du nach `15*"`, erkennt das System automatisch alle gängigen Schreibweisen wie `15,6 Zoll`, `15 Zoll`, `15-Zoll`, `15"`, `15.6"` oder `15 inch` – ohne dass du jede Variante einzeln anlegen musst.
 * **Synonym-Erkennung (`Laptop` / `Notebook`):** Bei der Suche nach `Laptop` oder `Laptops` werden Inserate mit `Notebook` oder `Notebooks` automatisch als vollwertiger Treffer gewertet und umgekehrt.
@@ -129,7 +131,7 @@ Das Skript stoppt alle Dienste oder Container sauber und fragt dich, ob deine bi
 ```text
 KleinanzeigenRadar/
 ├── app/
-│   ├── config.py           # Konfiguration, Pfade & Version 0.2.0
+│   ├── config.py           # Konfiguration, Pfade & Version 0.2.1
 │   ├── database.py         # Schnelle SQLite-Datenbank, Preisverlauf & relative Zeit
 │   ├── network_utils.py    # Automatische Suche nach freien Ports & IPs
 │   ├── ssl_cert.py         # Automatische SSL-Zertifikatsgenerierung (HTTPS)

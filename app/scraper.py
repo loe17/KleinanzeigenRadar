@@ -102,6 +102,19 @@ def fetch_live_result_count(
     radius: int = 0
 ) -> int:
     """Fragt bei Kleinanzeigen die aktuelle Anzahl an Treffern für eine Suche ab."""
+    if "|" in query:
+        alts = [a.strip() for a in query.split("|") if a.strip()]
+        total = 0
+        for alt in alts[:3]:
+            total += fetch_live_result_count(
+                query=alt,
+                min_price=min_price,
+                max_price=max_price,
+                postal_code=postal_code,
+                radius=radius
+            )
+        return total
+
     url = build_search_url_for_query(
         query=query,
         min_price=min_price,
@@ -205,6 +218,19 @@ def compile_keyword_pattern(term: str, case_sensitive: bool = False) -> re.Patte
     term = term.strip()
     if not term:
         return re.compile(r"$^")
+
+    # 0. ODER-Syntax unterstützen (z. B. "Laptop | Notebook" oder "Sofa | Couch")
+    if "|" in term:
+        alts = [a.strip() for a in term.split("|") if a.strip()]
+        if len(alts) > 1:
+            sub_patterns = [compile_keyword_pattern(alt, case_sensitive).pattern for alt in alts]
+            combined_pattern = f"(?:(?:{')|(?:'.join(sub_patterns)}))"
+            flags = 0 if case_sensitive else re.IGNORECASE
+            return re.compile(combined_pattern, flags)
+        elif len(alts) == 1:
+            term = alts[0]
+        else:
+            return re.compile(r"$^")
 
     t_clean = term.lower().strip()
     # 1. Synonym-Erkennung für Laptop / Notebook im deutschen Sprachgebrauch
@@ -310,20 +336,23 @@ def matches_keywords(
             return False, f"Fehlender Suchbegriff: '{word}'"
 
         if in_title:
-            title_matches.append(word)
+            m = rx.search(title_str)
+            title_matches.append(m.group(0) if m else word)
         elif in_desc:
             m = rx.search(desc_str)
+            matched_term = m.group(0) if m else word
             if m:
                 s_start = max(0, m.start() - 15)
                 s_end = min(len(desc_str), m.end() + 20)
                 snip = desc_str[s_start:s_end].replace("\n", " ").strip()
                 prefix_dot = "..." if s_start > 0 else ""
                 suffix_dot = "..." if s_end < len(desc_str) else ""
-                desc_matches.append(f"'{word}' ({prefix_dot}{snip}{suffix_dot})")
+                desc_matches.append(f"'{matched_term}' ({prefix_dot}{snip}{suffix_dot})")
             else:
-                desc_matches.append(f"'{word}'")
+                desc_matches.append(f"'{matched_term}'")
         elif in_ocr:
-            ocr_matches.append(f"'{word}'")
+            m = rx.search(ocr_str)
+            ocr_matches.append(f"'{m.group(0) if m else word}'")
 
     sections = []
     if title_matches:
@@ -461,26 +490,37 @@ def scrape_search(
     search_queries = []
     if include_terms:
         # Für die Kleinanzeigen-Such-URL bereinigen wir Wildcards (*, ?), damit Kleinanzeigen
-        # sauber nach dem Kernbegriff sucht
-        clean_terms = [re.sub(r"[*?]+", "", it).strip() for it in include_terms]
-        clean_terms = [t for t in clean_terms if t]
+        # sauber nach dem Kernbegriff sucht. Bei ODER (|) erzeugen wir gezielte Alternativ-Abfragen.
+        term_options = []
+        for it in include_terms:
+            if "|" in it:
+                alts = [re.sub(r"[*?\"']+", "", a).strip() for a in it.split("|")]
+                alts = [a for a in alts if a]
+                term_options.append(alts if alts else [""])
+            else:
+                cleaned = re.sub(r"[*?\"']+", "", it).strip()
+                term_options.append([cleaned] if cleaned else [""])
 
-        if clean_terms:
-            # Hauptabfrage mit allen Kernbegriffen kombiniert (z. B. "Lenovo T480")
-            combined = " ".join(clean_terms)
-            search_queries.append(combined)
-        else:
+        import itertools
+        all_combos = list(itertools.product(*term_options))
+        seen_queries = set()
+        for combo in all_combos:
+            q = " ".join(part for part in combo if part).strip()
+            if q and q not in seen_queries:
+                seen_queries.add(q)
+                search_queries.append(q)
+            if len(search_queries) >= 4:
+                break
+
+        if not search_queries:
             search_queries = [""]
     else:
         search_queries = [""]
 
     all_matched = {}
+    total_queries = len(search_queries)
 
-    if on_progress:
-        display_q = search_queries[0] if search_queries and search_queries[0] else search.get("name", "Suchauftrag")
-        on_progress(10, f"Frage Kleinanzeigen nach '{display_q}' ab...", 0, 0)
-
-    for query_term in search_queries:
+    for q_idx, query_term in enumerate(search_queries, 1):
         parsed_items = []
         max_pages = 2
         for page_num in range(1, max_pages + 1):
@@ -493,6 +533,12 @@ def scrape_search(
                 page=page_num
             )
             logger.info(f"Suche '{search.get('name')}' - Abruf Begriff '{query_term}' (Seite {page_num}): {url}")
+            if on_progress:
+                display_q = f"'{query_term}'" if query_term else search.get("name", "Suchauftrag")
+                if total_queries > 1:
+                    on_progress(10 + int(15 * (q_idx - 1) / total_queries), f"Frage Kleinanzeigen ab ({q_idx}/{total_queries}): {display_q} (Seite {page_num})...", len(all_matched), 0)
+                else:
+                    on_progress(10, f"Frage Kleinanzeigen ab: {display_q} (Seite {page_num})...", len(all_matched), 0)
 
             try:
                 resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=12)

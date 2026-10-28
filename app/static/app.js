@@ -57,6 +57,8 @@ function initIcons() {
   document.getElementById("icon-cfg-github").innerHTML = getSvgIcon("github", 16);
   document.getElementById("icon-check-update").innerHTML = getSvgIcon("search", 14);
   document.getElementById("icon-perform-update").innerHTML = getSvgIcon("download", 14);
+  const helpHeaderIcon = document.getElementById("icon-help-header");
+  if (helpHeaderIcon) helpHeaderIcon.innerHTML = getSvgIcon("lightbulb", 14);
 }
 
 // --- Sprachwechsel & Übersetzungsaktualisierung ---
@@ -77,8 +79,19 @@ function updateStaticTranslations() {
   document.querySelectorAll("[data-i18n]").forEach(el => {
     const key = el.getAttribute("data-i18n");
     if (key) {
-      el.innerText = t(key);
+      const val = t(key);
+      if (val.includes("<")) {
+        el.innerHTML = val;
+      } else {
+        el.innerText = val;
+      }
     }
+  });
+
+  // Tooltips übersetzen
+  document.querySelectorAll("[data-i18n-title]").forEach(el => {
+    const key = el.getAttribute("data-i18n-title");
+    if (key) el.title = t(key);
   });
 
   // Platzhalter übersetzen
@@ -188,6 +201,22 @@ function setupEventListeners() {
   document.getElementById("btn-test-email").addEventListener("click", testEmail);
   document.getElementById("btn-check-update").addEventListener("click", checkUpdate);
   document.getElementById("btn-perform-update").addEventListener("click", performUpdate);
+
+  // Suchanleitung & Beispiele (Infobox)
+  const btnToggleHelp = document.getElementById("btn-toggle-search-help");
+  const helpBox = document.getElementById("search-help-box");
+  const btnCloseHelp = document.getElementById("btn-close-search-help");
+  if (btnToggleHelp && helpBox) {
+    btnToggleHelp.addEventListener("click", () => {
+      const isHidden = helpBox.style.display === "none" || !helpBox.style.display;
+      helpBox.style.display = isHidden ? "block" : "none";
+    });
+  }
+  if (btnCloseHelp && helpBox) {
+    btnCloseHelp.addEventListener("click", () => {
+      helpBox.style.display = "none";
+    });
+  }
 
   // Begriff hinzufügen & Live-Vorschau
   const btnAddTerm = document.getElementById("btn-add-term");
@@ -788,6 +817,9 @@ async function updateLiveCountPreview() {
 function openSearchModal(searchData = null) {
   const form = document.getElementById("search-form");
   form.reset();
+
+  const helpBox = document.getElementById("search-help-box");
+  if (helpBox) helpBox.style.display = "none";
 
   const timeBox = document.getElementById("search-timestamps-info");
   const sCreatedAt = document.getElementById("s-created-at-text");

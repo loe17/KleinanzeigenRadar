@@ -168,8 +168,69 @@
           </div>
 
           <!-- Multi-Begriff Builder (Such- & Ausschlussbegriffe) -->
+          <!-- Multi-Begriff Builder (Such- & Ausschlussbegriffe) -->
           <div class="form-group">
-            <label class="form-label" data-i18n="lbl_terms_section">Such- &amp; Ausschlussbegriffe *</label>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <label class="form-label" style="margin-bottom: 0;" data-i18n="lbl_terms_section">Such- &amp; Ausschlussbegriffe *</label>
+              <button type="button" class="btn-info-icon" id="btn-toggle-search-help" data-i18n-title="btn_search_help_title" title="Suchanleitung &amp; Beispiele anzeigen">
+                <span class="icon-wrap" id="icon-search-help"></span>
+                <span class="info-icon-badge">i</span>
+              </button>
+            </div>
+
+            <!-- Ausklappbare Suchanleitung / Infobox -->
+            <div class="search-help-box" id="search-help-box" style="display: none;">
+              <div class="search-help-header">
+                <div class="search-help-title">
+                  <span class="icon-wrap" id="icon-help-header"></span>
+                  <span data-i18n="help_box_title">Suchanleitung &amp; clevere Beispiele</span>
+                </div>
+                <button type="button" class="btn-close-help" id="btn-close-search-help" title="Schließen">&times;</button>
+              </div>
+              <div class="search-help-grid">
+                <div class="search-help-card">
+                  <div class="help-card-badge" data-i18n="help_badge_or">ODER-Suche (|)</div>
+                  <p data-i18n="help_desc_or">Mindestens einer der durch senkrechten Strich getrennten Begriffe muss vorkommen.</p>
+                  <div class="help-examples">
+                    <code>Laptop | Notebook</code>
+                    <code>Sofa | Couch</code>
+                    <code>15*" | 17*"</code>
+                  </div>
+                </div>
+                <div class="search-help-card">
+                  <div class="help-card-badge" data-i18n="help_badge_wildcard">Teilwörter &amp; Joker (*)</div>
+                  <p data-i18n="help_desc_wildcard">Mit Sternchen findest du Begriffe auch innerhalb zusammengesetzter Wörter.</p>
+                  <div class="help-examples">
+                    <code>*15*</code> <span class="help-subtext">(15Zoll, XPS15)</span><br>
+                    <code>-*defekt*</code> <span class="help-subtext">(Teildefekt, defekt)</span>
+                  </div>
+                </div>
+                <div class="search-help-card">
+                  <div class="help-card-badge" data-i18n="help_badge_units">Einheiten &amp; Speicher</div>
+                  <p data-i18n="help_desc_units">Automatische Toleranz für Leerzeichen und Schreibweisen zwischen Zahl und Einheit.</p>
+                  <div class="help-examples">
+                    <code>*16*GB</code> <span class="help-subtext">(16GB, 16 GB, RAM: 16 GB)</span><br>
+                    <code>1TB</code> <span class="help-subtext">(1TB, 1 TB)</span>
+                  </div>
+                </div>
+                <div class="search-help-card">
+                  <div class="help-card-badge" data-i18n="help_badge_dimensions">Maße &amp; Displaygrößen</div>
+                  <p data-i18n="help_desc_dimensions">Erkennt Zollzeichen, Zoll-Ausschreibungen und Zentimeter-Maße vollautomatisch.</p>
+                  <div class="help-examples">
+                    <code>15*"</code> <span class="help-subtext">(15,6 Zoll, 15 Zoll, 15", 15.6")</span><br>
+                    <code>120cm</code> <span class="help-subtext">(120cm, 120 cm, 120-cm)</span>
+                  </div>
+                </div>
+                <div class="search-help-card full-width">
+                  <div class="help-card-badge" data-i18n="help_badge_logic">Suchlogik (Grün vs. Rot)</div>
+                  <p data-i18n="help_desc_logic">
+                    <b>Grün (Suchbegriffe):</b> Müssen <u>alle</u> in der Anzeige vorkommen (im Titel, im Text oder auf Fotos).<br>
+                    <b>Rot (Ausschlussbegriffe):</b> Schließt das Angebot sofort aus, wenn auch nur <u>einer</u> der Begriffe vorkommt.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div class="term-builder-row">
               <input type="text" class="form-control" id="term-input" placeholder="Begriff eingeben (z. B. Dell Latitude, *15* oder defekt)...">
               <select class="form-control" id="term-type" style="width: auto; min-width: 185px;">
@@ -181,7 +242,7 @@
                 <span data-i18n="btn_add_term">Hinzufügen</span>
               </button>
             </div>
-            <div class="form-hint" data-i18n="hint_terms_section">Suchbegriffe (grün) werden gesucht. Tipp: Nutze Sternchen (*) wie *15* für Wortteile (z. B. 15Zoll) oder *16*GB, um 16GB, 16 GB sowie RAM: 16 GB zu finden. Ausschlussbegriffe (rot) wie -*defekt* filtern auch Teilwörter (z. B. Teildefekt) heraus.</div>
+            <div class="form-hint" data-i18n="hint_terms_section">Suchbegriffe (grün) werden gesucht. Tipp: Nutze Sternchen (*) wie *15* für Wortteile oder ODER (|) wie Laptop | Notebook. Klicke auf das (i) für viele clevere Beispiele.</div>
 
             <!-- Liste der hinterlegten Begriffe -->
             <div class="terms-container" id="terms-list-container">
