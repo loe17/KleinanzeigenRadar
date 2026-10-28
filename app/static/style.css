@@ -737,3 +737,104 @@ body {
   max-height: 150px;
   overflow-y: auto;
 }
+
+/* --- Multi-Begriff Builder & Badges --- */
+.term-builder-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 600px) {
+  .term-builder-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.terms-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+  min-height: 32px;
+}
+
+.term-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.term-pill.include {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.term-pill.exclude {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.term-pill .btn-remove-term {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 13px;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.6;
+  display: inline-flex;
+  align-items: center;
+}
+
+.term-pill .btn-remove-term:hover {
+  opacity: 1;
+}
+
+/* Live-Treffer Vorschau */
+.live-preview-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+  transition: all 0.2s ease;
+}
+
+.live-preview-box.has-results {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+  font-weight: 500;
+}
+
+.live-preview-box.is-loading {
+  opacity: 0.75;
+}
+
+/* Suchauftrag Datums-Info in Seitenleiste */
+.search-nav-sub {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

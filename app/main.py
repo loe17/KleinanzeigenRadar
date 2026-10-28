@@ -1,7 +1,7 @@
 import os
 import logging
 from contextlib import asynccontextmanager
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
@@ -24,6 +24,7 @@ from app.database import (
     get_settings,
     save_settings
 )
+from app.scraper import fetch_live_result_count
 from app.watcher import watcher_service
 from app.notifier import test_telegram_connection, test_email_connection
 from app.updater import check_for_github_update, perform_update
@@ -56,10 +57,15 @@ templates = Jinja2Templates(directory=str(templates_dir))
 
 # --- Pydantic Datenmodelle ---
 
+class SearchTerm(BaseModel):
+    text: str
+    type: str = "include"  # 'include' oder 'exclude'
+
 class SearchCreateUpdate(BaseModel):
     name: str
-    query: str
+    query: Optional[str] = ""
     keywords: Optional[str] = ""
+    terms: Optional[List[SearchTerm]] = []
     case_sensitive: Optional[bool] = False
     search_in_description: Optional[bool] = True
     ocr_images: Optional[bool] = True
@@ -100,6 +106,23 @@ async def api_stats():
 @app.get("/api/searches")
 async def api_get_searches():
     return get_all_searches()
+
+@app.get("/api/searches/preview-count")
+async def api_preview_count(
+    query: Optional[str] = "",
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    postal_code: Optional[str] = "",
+    radius: Optional[int] = 0
+):
+    count = fetch_live_result_count(
+        query=query or "",
+        min_price=min_price,
+        max_price=max_price,
+        postal_code=postal_code or "",
+        radius=radius or 0
+    )
+    return {"count": count}
 
 @app.post("/api/searches")
 async def api_create_search(data: SearchCreateUpdate, bg: BackgroundTasks):

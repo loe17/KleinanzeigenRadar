@@ -21,18 +21,6 @@
         <span class="brand-badge">v{{ version }}</span>
       </div>
 
-      <!-- Sprachauswahl (DE / EN) -->
-      <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 10px 10px 10px;">
-        <span style="font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; gap: 5px;">
-          <span id="globe-icon-container"></span>
-          <span data-i18n="language_label">Sprache / Language</span>
-        </span>
-        <div class="lang-switch-box">
-          <button type="button" class="lang-btn" id="lang-btn-de" onclick="changeLanguage('de')">DE</button>
-          <button type="button" class="lang-btn" id="lang-btn-en" onclick="changeLanguage('en')">EN</button>
-        </div>
-      </div>
-
       <!-- Hauptnavigation -->
       <div class="nav-section-title" data-i18n="nav_overview">Übersicht</div>
       
@@ -142,22 +130,43 @@
         <input type="hidden" id="search-id-input">
         <div class="modal-body">
           
-          <div class="form-row">
-            <div class="form-group" style="flex: 2;">
-              <label class="form-label" data-i18n="lbl_search_name">Name des Suchauftrags *</label>
-              <input type="text" class="form-control" id="s-name" placeholder="z. B. MacBook Pro M1 16GB" required>
-            </div>
-            <div class="form-group" style="flex: 2;">
-              <label class="form-label" data-i18n="lbl_search_query">Suchbegriff auf Kleinanzeigen *</label>
-              <input type="text" class="form-control" id="s-query" placeholder="z. B. Macbook Pro" required>
-              <div class="form-hint" data-i18n="hint_search_query">Der Hauptbegriff, mit dem Kleinanzeigen durchsucht wird.</div>
-            </div>
+          <!-- Zeitstempel (Erstellt am / Zuletzt geprüft) -->
+          <div id="search-timestamps-info" style="display: none; background: var(--bg-subtle); padding: 8px 12px; border-radius: var(--radius-md); margin-bottom: 14px; font-size: 12px; color: var(--text-secondary); display: flex; gap: 16px; flex-wrap: wrap;">
+            <div><span data-i18n="lbl_created_at">Erstellt am:</span> <b id="s-created-at-text" style="color: var(--text-main);">-</b></div>
+            <div><span data-i18n="lbl_last_checked">Zuletzt geprüft:</span> <b id="s-last-run-text" style="color: var(--text-main);">-</b></div>
           </div>
 
           <div class="form-group">
-            <label class="form-label" data-i18n="lbl_keywords">Zusätzliche Pflicht- und Ausschlussbegriffe (optional)</label>
-            <textarea class="form-control" id="s-keywords" rows="2" placeholder="z. B. M1, 16GB, -defekt, -bastler"></textarea>
-            <div class="form-hint" data-i18n="hint_keywords">Trenne Begriffe durch Kommas. Begriffe mit Minus (-) wie -defekt sortieren Angebote automatisch aus.</div>
+            <label class="form-label" data-i18n="lbl_search_name">Name des Suchauftrags *</label>
+            <input type="text" class="form-control" id="s-name" placeholder="z. B. Dell Latitude & Lenovo T480" required>
+          </div>
+
+          <!-- Multi-Begriff Builder (Such- & Ausschlussbegriffe) -->
+          <div class="form-group">
+            <label class="form-label" data-i18n="lbl_terms_section">Such- &amp; Ausschlussbegriffe *</label>
+            <div class="term-builder-row">
+              <input type="text" class="form-control" id="term-input" placeholder="Begriff eingeben (z. B. Dell Latitude oder defekt)...">
+              <select class="form-control" id="term-type" style="width: auto; min-width: 185px;">
+                <option value="include" data-i18n="term_type_include">Suchbegriff (Wird gesucht)</option>
+                <option value="exclude" data-i18n="term_type_exclude">Ausschlussbegriff (Wird aussortiert)</option>
+              </select>
+              <button type="button" class="btn btn-primary" id="btn-add-term">
+                <span class="icon-wrap" id="icon-btn-add-term"></span>
+                <span data-i18n="btn_add_term">Hinzufügen</span>
+              </button>
+            </div>
+            <div class="form-hint" data-i18n="hint_terms_section">Suchbegriffe (grün) werden auf Kleinanzeigen gesucht. Ausschlussbegriffe (rot) filtern Angebote mit diesem Wort im Titel, Text oder Bild zuverlässig heraus.</div>
+
+            <!-- Liste der hinterlegten Begriffe -->
+            <div class="terms-container" id="terms-list-container">
+              <!-- Dynamische Badges -->
+            </div>
+
+            <!-- Live-Treffer Vorschau -->
+            <div class="live-preview-box" id="live-preview-box">
+              <span class="icon-wrap" id="icon-live-preview"></span>
+              <span id="live-preview-text" data-i18n="live_count_prompt">Gib mindestens einen Suchbegriff ein für die Live-Vorschau</span>
+            </div>
           </div>
 
           <div class="form-row" style="background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-md); margin-bottom: 16px;">
@@ -304,6 +313,23 @@
       <form id="settings-form">
         <div class="modal-body">
           
+          <!-- Sprache Auswahl -->
+          <div style="margin-bottom: 20px;">
+            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: var(--primary); display: flex; align-items: center; gap: 6px;">
+              <span class="icon-wrap" id="icon-cfg-lang"></span>
+              <span data-i18n="sec_language">Sprache / Language</span>
+            </h3>
+            <div class="form-group" style="max-width: 280px;">
+              <label class="form-label" data-i18n="lbl_language">Sprache der Benutzeroberfläche</label>
+              <select class="form-control" id="cfg-language" onchange="changeLanguage(this.value)">
+                <option value="de" data-i18n="opt_lang_de">Deutsch (Standard)</option>
+                <option value="en" data-i18n="opt_lang_en">English</option>
+              </select>
+            </div>
+          </div>
+
+          <hr style="border: 0; border-top: 1px solid var(--border); margin: 16px 0;">
+
           <!-- Telegram Bereich -->
           <div style="margin-bottom: 20px;">
             <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #0284c7; display: flex; align-items: center; gap: 6px;">

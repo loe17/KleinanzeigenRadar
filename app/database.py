@@ -1,5 +1,6 @@
 import sqlite3
 import json
+import re
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from app.config import DB_PATH
@@ -33,9 +34,16 @@ def init_db():
         is_active INTEGER DEFAULT 1,
         interval_minutes INTEGER DEFAULT 15,
         last_run TEXT,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        terms_json TEXT DEFAULT '[]'
     );
     """)
+
+    # Prüfen, ob Spalte terms_json existiert (falls Tabelle schon angelegt war)
+    cursor.execute("PRAGMA table_info(searches)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if "terms_json" not in columns:
+        cursor.execute("ALTER TABLE searches ADD COLUMN terms_json TEXT DEFAULT '[]'")
 
     # Tabelle für gefundene Inserate
     cursor.execute("""
@@ -109,6 +117,47 @@ def save_settings(new_settings: Dict[str, str]):
 
 # --- Hilfsfunktionen für Suchaufträge ---
 
+def format_datetime_str(dt_str: Optional[str]) -> str:
+    """Wandelt einen ISO-Zeitstempel in deutsches Datums- und Uhrzeitformat um."""
+    if not dt_str:
+        return ""
+    try:
+        dt = datetime.fromisoformat(dt_str)
+        return dt.strftime("%d.%m.%Y, %H:%M Uhr")
+    except Exception:
+        return dt_str
+
+def _enrich_search_dict(search_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """Erweitert den Suchauftrag um formatierte Zeitstempel und die Begriffsliste."""
+    terms = []
+    raw_terms_json = search_dict.get("terms_json")
+    if raw_terms_json:
+        try:
+            terms = json.loads(raw_terms_json)
+        except Exception:
+            terms = []
+
+    if not terms:
+        # Falls terms_json noch leer ist, migrieren wir aus query und keywords
+        query = (search_dict.get("query") or "").strip()
+        if query:
+            terms.append({"text": query, "type": "include"})
+        keywords_str = (search_dict.get("keywords") or "").strip()
+        if keywords_str:
+            for kw in re.split(r"[,;\n]+", keywords_str):
+                kw = kw.strip()
+                if not kw:
+                    continue
+                if kw.startswith("-") or kw.startswith("!"):
+                    terms.append({"text": kw[1:].strip(), "type": "exclude"})
+                else:
+                    terms.append({"text": kw, "type": "include"})
+
+    search_dict["terms"] = terms
+    search_dict["created_at_formatted"] = format_datetime_str(search_dict.get("created_at"))
+    search_dict["last_run_formatted"] = format_datetime_str(search_dict.get("last_run")) or "Noch nie geprüft"
+    return search_dict
+
 def get_all_searches(active_only: bool = False) -> List[Dict[str, Any]]:
     conn = get_db()
     query = "SELECT * FROM searches"
@@ -117,29 +166,46 @@ def get_all_searches(active_only: bool = False) -> List[Dict[str, Any]]:
     query += " ORDER BY id DESC"
     rows = conn.execute(query).fetchall()
     conn.close()
-    return [dict(row) for row in rows]
+    return [_enrich_search_dict(dict(row)) for row in rows]
 
 def get_search(search_id: int) -> Optional[Dict[str, Any]]:
     conn = get_db()
     row = conn.execute("SELECT * FROM searches WHERE id = ?", (search_id,)).fetchone()
     conn.close()
-    return dict(row) if row else None
+    return _enrich_search_dict(dict(row)) if row else None
 
 def create_search(data: Dict[str, Any]) -> int:
     conn = get_db()
     cursor = conn.cursor()
     now = datetime.now().isoformat()
+
+    terms = data.get("terms") or []
+    if terms:
+        terms_json = json.dumps(terms, ensure_ascii=False)
+        include_list = [t["text"].strip() for t in terms if t.get("type") == "include" and t.get("text", "").strip()]
+        exclude_list = [f"-{t['text'].strip()}" for t in terms if t.get("type") == "exclude" and t.get("text", "").strip()]
+        query_val = include_list[0] if include_list else (data.get("query") or "")
+        keywords_val = ", ".join(include_list[1:] + exclude_list)
+    else:
+        query_val = data.get("query", "")
+        keywords_val = data.get("keywords", "")
+        terms_list = []
+        if query_val:
+            terms_list.append({"text": query_val.strip(), "type": "include"})
+        terms_json = json.dumps(terms_list, ensure_ascii=False)
+
     cursor.execute("""
     INSERT INTO searches (
-        name, query, keywords, case_sensitive, search_in_description,
+        name, query, keywords, terms_json, case_sensitive, search_in_description,
         ocr_images, min_price, max_price, postal_code, radius,
         shipping_type, notify_telegram, notify_email, is_active,
         interval_minutes, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         data.get("name"),
-        data.get("query"),
-        data.get("keywords", ""),
+        query_val,
+        keywords_val,
+        terms_json,
         1 if data.get("case_sensitive") else 0,
         1 if data.get("search_in_description", True) else 0,
         1 if data.get("ocr_images", True) else 0,
@@ -162,11 +228,28 @@ def create_search(data: Dict[str, Any]) -> int:
 def update_search(search_id: int, data: Dict[str, Any]):
     conn = get_db()
     cursor = conn.cursor()
+
+    terms = data.get("terms") or []
+    if terms:
+        terms_json = json.dumps(terms, ensure_ascii=False)
+        include_list = [t["text"].strip() for t in terms if t.get("type") == "include" and t.get("text", "").strip()]
+        exclude_list = [f"-{t['text'].strip()}" for t in terms if t.get("type") == "exclude" and t.get("text", "").strip()]
+        query_val = include_list[0] if include_list else (data.get("query") or "")
+        keywords_val = ", ".join(include_list[1:] + exclude_list)
+    else:
+        query_val = data.get("query", "")
+        keywords_val = data.get("keywords", "")
+        terms_list = []
+        if query_val:
+            terms_list.append({"text": query_val.strip(), "type": "include"})
+        terms_json = json.dumps(terms_list, ensure_ascii=False)
+
     cursor.execute("""
     UPDATE searches SET
         name = ?,
         query = ?,
         keywords = ?,
+        terms_json = ?,
         case_sensitive = ?,
         search_in_description = ?,
         ocr_images = ?,
@@ -182,8 +265,9 @@ def update_search(search_id: int, data: Dict[str, Any]):
     WHERE id = ?
     """, (
         data.get("name"),
-        data.get("query"),
-        data.get("keywords", ""),
+        query_val,
+        keywords_val,
+        terms_json,
         1 if data.get("case_sensitive") else 0,
         1 if data.get("search_in_description", True) else 0,
         1 if data.get("ocr_images", True) else 0,

@@ -23,7 +23,15 @@ document.addEventListener("DOMContentLoaded", () => {
 // --- Statische SVG-Icons im DOM initialisieren ---
 
 function initIcons() {
-  document.getElementById("globe-icon-container").innerHTML = getSvgIcon("globe", 13);
+  const globeContainer = document.getElementById("globe-icon-container");
+  if (globeContainer) globeContainer.innerHTML = getSvgIcon("globe", 13);
+  const cfgLangIcon = document.getElementById("icon-cfg-lang");
+  if (cfgLangIcon) cfgLangIcon.innerHTML = getSvgIcon("globe", 16);
+  const addTermIcon = document.getElementById("icon-btn-add-term");
+  if (addTermIcon) addTermIcon.innerHTML = getSvgIcon("plus", 14);
+  const livePreviewIcon = document.getElementById("icon-live-preview");
+  if (livePreviewIcon) livePreviewIcon.innerHTML = getSvgIcon("search", 14);
+
   document.getElementById("icon-nav-all").innerHTML = getSvgIcon("inbox", 15);
   document.getElementById("icon-nav-new").innerHTML = getSvgIcon("sparkles", 15);
   document.getElementById("icon-nav-starred").innerHTML = getSvgIcon("star", 15);
@@ -32,8 +40,10 @@ function initIcons() {
   document.getElementById("icon-nav-settings").innerHTML = getSvgIcon("settings", 15);
   document.getElementById("icon-btn-check").innerHTML = getSvgIcon("check", 14);
   document.getElementById("icon-btn-refresh").innerHTML = getSvgIcon("refresh", 14);
-  document.getElementById("icon-btn-plus").innerHTML = getSvgIcon("plus", 14);
-  document.getElementById("search-bar-icon").innerHTML = getSvgIcon("search", 14);
+  const iconBtnPlus = document.getElementById("icon-btn-plus");
+  if (iconBtnPlus) iconBtnPlus.innerHTML = getSvgIcon("plus", 14);
+  const searchBarIcon = document.getElementById("search-bar-icon");
+  if (searchBarIcon) searchBarIcon.innerHTML = getSvgIcon("search", 14);
   document.getElementById("btn-close-search-modal").innerHTML = getSvgIcon("x", 16);
   document.getElementById("btn-close-detail-modal").innerHTML = getSvgIcon("x", 16);
   document.getElementById("btn-close-settings-modal").innerHTML = getSvgIcon("x", 16);
@@ -58,9 +68,8 @@ function changeLanguage(lang) {
 }
 
 function updateStaticTranslations() {
-  // Aktiven Button hervorheben
-  document.getElementById("lang-btn-de").classList.toggle("active", currentLang === "de");
-  document.getElementById("lang-btn-en").classList.toggle("active", currentLang === "en");
+  const cfgLang = document.getElementById("cfg-language");
+  if (cfgLang) cfgLang.value = currentLang;
 
   // Alle Elemente mit data-i18n Attribut übersetzen
   document.querySelectorAll("[data-i18n]").forEach(el => {
@@ -71,17 +80,26 @@ function updateStaticTranslations() {
   });
 
   // Platzhalter übersetzen
-  document.getElementById("filter-search-input").placeholder = t("filter_search_placeholder");
-  document.getElementById("filter-min-price").placeholder = t("filter_min_price");
-  document.getElementById("filter-max-price").placeholder = t("filter_max_price");
-  document.getElementById("s-name").placeholder = t("ph_search_name");
-  document.getElementById("s-query").placeholder = t("ph_search_query");
-  document.getElementById("s-keywords").placeholder = t("ph_keywords");
-  document.getElementById("s-min-price").placeholder = t("ph_price_any");
-  document.getElementById("s-max-price").placeholder = t("ph_price_any");
-  document.getElementById("s-plz").placeholder = t("ph_plz");
-  document.getElementById("cfg-telegram-token").placeholder = t("ph_bot_token");
-  document.getElementById("cfg-telegram-chat-id").placeholder = t("ph_chat_id");
+  const fSearch = document.getElementById("filter-search-input");
+  if (fSearch) fSearch.placeholder = t("filter_search_placeholder");
+  const fMin = document.getElementById("filter-min-price");
+  if (fMin) fMin.placeholder = t("filter_min_price");
+  const fMax = document.getElementById("filter-max-price");
+  if (fMax) fMax.placeholder = t("filter_max_price");
+  const sName = document.getElementById("s-name");
+  if (sName) sName.placeholder = t("ph_search_name");
+  const termIn = document.getElementById("term-input");
+  if (termIn) termIn.placeholder = t("ph_term_input");
+  const sMin = document.getElementById("s-min-price");
+  if (sMin) sMin.placeholder = t("ph_price_any");
+  const sMax = document.getElementById("s-max-price");
+  if (sMax) sMax.placeholder = t("ph_price_any");
+  const sPlz = document.getElementById("s-plz");
+  if (sPlz) sPlz.placeholder = t("ph_plz");
+  const cfgTelTok = document.getElementById("cfg-telegram-token");
+  if (cfgTelTok) cfgTelTok.placeholder = t("ph_bot_token");
+  const cfgTelChat = document.getElementById("cfg-telegram-chat-id");
+  if (cfgTelChat) cfgTelChat.placeholder = t("ph_chat_id");
 
   // Header-Titel je nach aktuellem Tab
   if (!activeSearchId) {
@@ -142,6 +160,32 @@ function setupEventListeners() {
   document.getElementById("btn-test-email").addEventListener("click", testEmail);
   document.getElementById("btn-check-update").addEventListener("click", checkUpdate);
   document.getElementById("btn-perform-update").addEventListener("click", performUpdate);
+
+  // Begriff hinzufügen & Live-Vorschau
+  const btnAddTerm = document.getElementById("btn-add-term");
+  if (btnAddTerm) btnAddTerm.addEventListener("click", addTermFromInput);
+
+  const termInput = document.getElementById("term-input");
+  if (termInput) {
+    termInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addTermFromInput();
+      }
+    });
+    termInput.addEventListener("input", debounce(updateLiveCountPreview, 350));
+  }
+
+  const termType = document.getElementById("term-type");
+  if (termType) termType.addEventListener("change", debounce(updateLiveCountPreview, 350));
+
+  ["s-min-price", "s-max-price", "s-plz", "s-radius"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener("input", debounce(updateLiveCountPreview, 400));
+      el.addEventListener("change", debounce(updateLiveCountPreview, 400));
+    }
+  });
 }
 
 // --- Navigation & Filter Handhabung ---
@@ -158,7 +202,20 @@ function setNavFilter(status, searchId) {
     if (el) el.classList.add("active");
     const s = allSearches.find(x => x.id === searchId);
     document.getElementById("header-title").innerText = s ? s.name : t("nav_searches");
-    document.getElementById("header-desc").innerText = s ? `Query: "${s.query}"` : "";
+    if (s) {
+      const created = s.created_at_formatted || "-";
+      const lastRun = s.last_run_formatted || t("lbl_never_checked");
+      const termsDesc = (s.terms && s.terms.length > 0)
+        ? s.terms.map(t => (t.type === 'exclude' ? `-${t.text}` : `+${t.text}`)).join(", ")
+        : (s.query || "");
+      document.getElementById("header-desc").innerHTML = `
+        <span><b>${t('lbl_created_at')}</b> ${escapeHtml(created)}</span> &bull; 
+        <span><b>${t('lbl_last_checked')}</b> ${escapeHtml(lastRun)}</span>
+        ${termsDesc ? ` &bull; <span><b>Begriffe:</b> ${escapeHtml(termsDesc)}</span>` : ''}
+      `;
+    } else {
+      document.getElementById("header-desc").innerText = "";
+    }
   } else {
     const el = document.getElementById(`nav-${status}`);
     if (el) el.classList.add("active");
@@ -241,9 +298,17 @@ function renderSearchesList() {
     item.id = `search-nav-${s.id}`;
     
     const statusIcon = s.is_active ? getSvgIcon('dotActive', 10) : getSvgIcon('dotInactive', 10);
+    const lastChecked = s.last_run_formatted || t('lbl_never_checked');
+    const createdDate = s.created_at_formatted || "";
+
     item.innerHTML = `
-      <span style="display: inline-flex; align-items: center;">${statusIcon}</span>
-      <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(s.name)}</span>
+      <span style="display: inline-flex; align-items: center; margin-top: 3px;">${statusIcon}</span>
+      <div style="flex: 1; overflow: hidden; min-width: 0;">
+        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500;">${escapeHtml(s.name)}</div>
+        <div class="search-nav-sub" title="${t('lbl_created_at')} ${createdDate} | ${t('lbl_last_checked')} ${lastChecked}">
+          ${t('lbl_last_checked')} ${escapeHtml(lastChecked)}
+        </div>
+      </div>
       <div class="search-item-actions">
         <button class="btn-icon-tiny" title="${currentLang === 'de' ? 'Jetzt ausführen' : 'Run now'}" onclick="runSearchNow(event, ${s.id})">${getSvgIcon('play', 12)}</button>
         <button class="btn-icon-tiny" title="${currentLang === 'de' ? 'Bearbeiten' : 'Edit'}" onclick="editSearch(event, ${s.id})">${getSvgIcon('pencil', 12)}</button>
@@ -438,18 +503,154 @@ async function markAllAsRead() {
   }
 }
 
-// --- Suchen verwalten ---
+// --- Suchen verwalten & Multi-Begriff Builder ---
+
+let currentTerms = [];
+
+function renderTermsList() {
+  const container = document.getElementById("terms-list-container");
+  if (!container) return;
+  container.innerHTML = "";
+
+  if (currentTerms.length === 0) {
+    container.innerHTML = `<span style="font-size: 12px; color: var(--text-muted); font-style: italic;">${t('no_terms_yet')}</span>`;
+    return;
+  }
+
+  currentTerms.forEach((term, idx) => {
+    const pill = document.createElement("span");
+    pill.className = `term-pill ${term.type}`;
+    const icon = term.type === "include" ? getSvgIcon("check", 11) : getSvgIcon("x", 11);
+    const prefix = term.type === "include" ? "+" : "-";
+
+    pill.innerHTML = `
+      ${icon}
+      <span>${prefix} ${escapeHtml(term.text)}</span>
+      <button type="button" class="btn-remove-term" title="Entfernen" onclick="removeTerm(${idx})">&times;</button>
+    `;
+    container.appendChild(pill);
+  });
+}
+
+function addTermFromInput() {
+  const input = document.getElementById("term-input");
+  const typeSelect = document.getElementById("term-type");
+  if (!input || !typeSelect) return;
+
+  const text = input.value.trim();
+  const type = typeSelect.value || "include";
+  if (!text) return;
+
+  // Verhindern von Duplikaten
+  if (!currentTerms.some(t => t.text.toLowerCase() === text.toLowerCase())) {
+    currentTerms.push({ text: text, type: type });
+    renderTermsList();
+    updateLiveCountPreview();
+  }
+
+  input.value = "";
+  input.focus();
+}
+
+function removeTerm(index) {
+  if (index >= 0 && index < currentTerms.length) {
+    currentTerms.splice(index, 1);
+    renderTermsList();
+    updateLiveCountPreview();
+  }
+}
+
+async function updateLiveCountPreview() {
+  const box = document.getElementById("live-preview-box");
+  const textEl = document.getElementById("live-preview-text");
+  const iconEl = document.getElementById("icon-live-preview");
+  if (!box || !textEl || !iconEl) return;
+
+  // Suchbegriff für Vorschau ermitteln:
+  // Entweder das aktuell im Feld eingetippte Wort (falls 'include')
+  // oder der erste/alle Suchbegriffe aus currentTerms
+  const typedVal = (document.getElementById("term-input") ? document.getElementById("term-input").value.trim() : "");
+  const typedType = document.getElementById("term-type") ? document.getElementById("term-type").value : "include";
+  
+  const includeTerms = currentTerms.filter(t => t.type === "include").map(t => t.text);
+  let queryForPreview = "";
+
+  if (typedVal && typedType === "include") {
+    queryForPreview = typedVal;
+  } else if (includeTerms.length > 0) {
+    queryForPreview = includeTerms[0];
+  }
+
+  if (!queryForPreview) {
+    box.className = "live-preview-box";
+    iconEl.innerHTML = getSvgIcon("search", 14);
+    textEl.innerText = t("live_count_prompt");
+    return;
+  }
+
+  // Ladezustand anzeigen
+  box.className = "live-preview-box is-loading";
+  iconEl.innerHTML = getSvgIcon("spinner", 14);
+  textEl.innerText = t("live_count_loading");
+
+  const minPrice = document.getElementById("s-min-price") ? document.getElementById("s-min-price").value.trim() : "";
+  const maxPrice = document.getElementById("s-max-price") ? document.getElementById("s-max-price").value.trim() : "";
+  const plz = document.getElementById("s-plz") ? document.getElementById("s-plz").value.trim() : "";
+  const radius = document.getElementById("s-radius") ? document.getElementById("s-radius").value : "0";
+
+  const params = new URLSearchParams();
+  params.append("query", queryForPreview);
+  if (minPrice) params.append("min_price", minPrice);
+  if (maxPrice) params.append("max_price", maxPrice);
+  if (plz) params.append("postal_code", plz);
+  if (radius && radius !== "0") params.append("radius", radius);
+
+  try {
+    const res = await fetch(`/api/searches/preview-count?${params.toString()}`);
+    const data = await res.json();
+    const count = data.count || 0;
+
+    box.className = "live-preview-box";
+    if (count > 0) {
+      box.classList.add("has-results");
+      iconEl.innerHTML = getSvgIcon("search", 14);
+      const formatted = count.toLocaleString(currentLang === "de" ? "de-DE" : "en-US");
+      textEl.innerText = t("live_count_results").replace("{count}", formatted);
+    } else {
+      iconEl.innerHTML = getSvgIcon("alert", 14);
+      textEl.innerText = t("live_count_zero");
+    }
+  } catch (err) {
+    box.className = "live-preview-box";
+    iconEl.innerHTML = getSvgIcon("alert", 14);
+    textEl.innerText = t("live_count_zero");
+  }
+}
 
 function openSearchModal(searchData = null) {
   const form = document.getElementById("search-form");
   form.reset();
 
+  const timeBox = document.getElementById("search-timestamps-info");
+  const sCreatedAt = document.getElementById("s-created-at-text");
+  const sLastRun = document.getElementById("s-last-run-text");
+
   if (searchData) {
     document.getElementById("search-modal-title").innerText = t("modal_search_edit_title");
     document.getElementById("search-id-input").value = searchData.id;
     document.getElementById("s-name").value = searchData.name || "";
-    document.getElementById("s-query").value = searchData.query || "";
-    document.getElementById("s-keywords").value = searchData.keywords || "";
+
+    if (timeBox && sCreatedAt && sLastRun) {
+      timeBox.style.display = "flex";
+      sCreatedAt.innerText = searchData.created_at_formatted || "-";
+      sLastRun.innerText = searchData.last_run_formatted || t("lbl_never_checked");
+    }
+
+    currentTerms = Array.isArray(searchData.terms) ? JSON.parse(JSON.stringify(searchData.terms)) : [];
+    if (currentTerms.length === 0 && searchData.query) {
+      currentTerms.push({ text: searchData.query, type: "include" });
+    }
+
     document.getElementById("s-case-sensitive").checked = Boolean(searchData.case_sensitive);
     document.getElementById("s-search-in-desc").checked = Boolean(searchData.search_in_description);
     document.getElementById("s-ocr-images").checked = Boolean(searchData.ocr_images);
@@ -465,6 +666,9 @@ function openSearchModal(searchData = null) {
   } else {
     document.getElementById("search-modal-title").innerText = t("modal_search_new_title");
     document.getElementById("search-id-input").value = "";
+    if (timeBox) timeBox.style.display = "none";
+    currentTerms = [];
+
     document.getElementById("s-interval").value = 15;
     document.getElementById("s-search-in-desc").checked = true;
     document.getElementById("s-ocr-images").checked = true;
@@ -472,6 +676,11 @@ function openSearchModal(searchData = null) {
     document.getElementById("s-notify-email").checked = true;
     document.getElementById("s-is-active").checked = true;
   }
+
+  renderTermsList();
+  const termInput = document.getElementById("term-input");
+  if (termInput) termInput.value = "";
+  updateLiveCountPreview();
 
   openModal("modal-search");
 }
@@ -515,11 +724,29 @@ async function confirmDeleteSearch(event, id) {
 
 async function handleSearchFormSubmit(e) {
   e.preventDefault();
+
+  // Falls der Nutzer im Begriff-Eingabefeld noch etwas stehen hat, automatisch hinzufügen
+  const termInput = document.getElementById("term-input");
+  if (termInput && termInput.value.trim()) {
+    addTermFromInput();
+  }
+
+  // Prüfen, ob mindestens ein Suchbegriff hinterlegt wurde
+  const hasInclude = currentTerms.some(t => t.type === "include" && t.text.trim());
+  if (!hasInclude) {
+    showToast(t("no_terms_yet"), "error");
+    return;
+  }
+
   const id = document.getElementById("search-id-input").value;
+  const includeTerms = currentTerms.filter(t => t.type === "include").map(t => t.text.trim());
+  const excludeTerms = currentTerms.filter(t => t.type === "exclude").map(t => `-${t.text.trim()}`);
+
   const payload = {
     name: document.getElementById("s-name").value.trim(),
-    query: document.getElementById("s-query").value.trim(),
-    keywords: document.getElementById("s-keywords").value.trim(),
+    query: includeTerms[0] || "",
+    keywords: includeTerms.slice(1).concat(excludeTerms).join(", "),
+    terms: currentTerms,
     case_sensitive: document.getElementById("s-case-sensitive").checked,
     search_in_description: document.getElementById("s-search-in-desc").checked,
     ocr_images: document.getElementById("s-ocr-images").checked,

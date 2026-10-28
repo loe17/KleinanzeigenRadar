@@ -28,6 +28,12 @@ class TestKleinanzeigenRadar(unittest.TestCase):
         self.assertEqual(parse_price("Zu verschenken"), 0.0)
         self.assertEqual(parse_price("35,50 €"), 35.5)
 
+    def test_clean_slug(self):
+        from app.scraper import clean_slug
+        self.assertEqual(clean_slug("Dell Latitude"), "dell-latitude")
+        self.assertEqual(clean_slug("Lenovo T480s (14 Zoll)"), "lenovo-t480s-14-zoll")
+        self.assertEqual(clean_slug("Große Käufe"), "grosse-kaeufe")
+
     def test_search_url_building(self):
         search = {
             "query": "Macbook",
@@ -37,11 +43,10 @@ class TestKleinanzeigenRadar(unittest.TestCase):
             "max_price": 800
         }
         url = build_search_url(search)
-        self.assertIn("keywords=Macbook", url)
-        self.assertIn("locationStr=10115", url)
-        self.assertIn("radius=20", url)
-        self.assertIn("minPrice=200", url)
-        self.assertIn("maxPrice=800", url)
+        self.assertIn("preis:200:800", url)
+        self.assertIn("10115/umkreis:20", url)
+        self.assertIn("macbook", url)
+        self.assertTrue(url.startswith("https://www.kleinanzeigen.de/s-"))
 
     def test_keyword_matching(self):
         # 1. Matching in description
@@ -118,6 +123,10 @@ class TestKleinanzeigenRadar(unittest.TestCase):
         s = get_search(s_id)
         self.assertEqual(s["name"], "Test Search")
         self.assertEqual(s["query"], "Thinkpad")
+        self.assertTrue(len(s.get("terms", [])) >= 1)
+        self.assertTrue("created_at_formatted" in s)
+        self.assertTrue("last_run_formatted" in s)
+        self.assertIn("Uhr", s["created_at_formatted"])
 
         # Result creation
         res_id = save_result({

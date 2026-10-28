@@ -2,6 +2,7 @@ import re
 import time
 import random
 import logging
+import json
 import urllib.parse
 from typing import List, Dict, Any, Optional, Tuple
 import requests
@@ -14,32 +15,113 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://www.kleinanzeigen.de"
 
-def build_search_url(search: Dict[str, Any]) -> str:
-    """Baut eine saubere Kleinanzeigen Such-URL basierend auf den Kriterien."""
-    query = search.get("query", "").strip()
-    plz = search.get("postal_code", "").strip()
-    radius = search.get("radius") or 0
-    min_price = search.get("min_price")
-    max_price = search.get("max_price")
+DEFAULT_HEADERS = {
+    "User-Agent": DEFAULT_USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Referer": BASE_URL,
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1"
+}
 
-    # URL-Parameter zusammenbauen
-    params = {}
-    if query:
-        params["keywords"] = query
-    if plz:
-        params["locationStr"] = plz
+def clean_slug(text: str) -> str:
+    """Wandelt einen Suchbegriff in einen suchmaschinenfreundlichen Kleinanzeigen-Slug um."""
+    if not text:
+        return ""
+    t = text.lower().strip()
+    t = t.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
+    t = re.sub(r"[^a-z0-9]+", "-", t)
+    return t.strip("-")
+
+def build_search_url_for_query(
+    query: str = "",
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    postal_code: str = "",
+    radius: int = 0
+) -> str:
+    """Baut eine moderne SEO-URL für Kleinanzeigen basierend auf Parametern."""
+    parts = []
+
+    # Preis-Pfad
+    has_min = min_price is not None and str(min_price).strip() != ""
+    has_max = max_price is not None and str(max_price).strip() != ""
+    if has_min or has_max:
+        min_s = str(int(float(min_price))) if has_min else ""
+        max_s = str(int(float(max_price))) if has_max else ""
+        parts.append(f"preis:{min_s}:{max_s}")
+
+    # PLZ & Umkreis
+    plz_clean = str(postal_code).strip() if postal_code else ""
+    if plz_clean:
         if radius and int(radius) > 0:
-            params["radius"] = str(radius)
-    if min_price is not None and min_price != "":
-        params["minPrice"] = str(min_price)
-    if max_price is not None and max_price != "":
-        params["maxPrice"] = str(max_price)
+            parts.append(f"{plz_clean}/umkreis:{int(radius)}")
+        else:
+            parts.append(f"{plz_clean}")
 
-    # Sortierung: Immer die neuesten zuerst ("Neueste Anzeigen")
-    params["sortingField"] = "SORTING_DATE"
+    # Suchbegriff
+    slug = clean_slug(query)
+    if slug:
+        parts.append(slug)
 
-    query_string = urllib.parse.urlencode(params)
-    return f"{BASE_URL}/s-suchanfrage.html?{query_string}"
+    path = "/".join(parts)
+    if path:
+        return f"{BASE_URL}/s-{path}/k0?sortingField=SORTING_DATE"
+    return f"{BASE_URL}/s-k0?sortingField=SORTING_DATE"
+
+def build_search_url(search: Dict[str, Any]) -> str:
+    """Kompatibilitäts-Funktion: Baut die Such-URL für einen Suchauftrag."""
+    query = search.get("query", "")
+    terms = search.get("terms") or []
+    if terms:
+        includes = [t["text"] for t in terms if t.get("type") == "include" and t.get("text")]
+        if includes:
+            query = includes[0]
+
+    return build_search_url_for_query(
+        query=query,
+        min_price=search.get("min_price"),
+        max_price=search.get("max_price"),
+        postal_code=search.get("postal_code", ""),
+        radius=search.get("radius", 0)
+    )
+
+def fetch_live_result_count(
+    query: str = "",
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    postal_code: str = "",
+    radius: int = 0
+) -> int:
+    """Fragt bei Kleinanzeigen die aktuelle Anzahl an Treffern für eine Suche ab."""
+    url = build_search_url_for_query(
+        query=query,
+        min_price=min_price,
+        max_price=max_price,
+        postal_code=postal_code,
+        radius=radius
+    )
+    try:
+        resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=8)
+        if resp.status_code != 200:
+            logger.warning(f"Live-Count Abfrage gab Status {resp.status_code} zurück für {url}")
+            return 0
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        summary = soup.find(id="srp-breadcrumb-summary") or soup.find(class_="breadcrumb-summary")
+        summary_text = summary.get_text(strip=True) if summary else resp.text
+
+        match = re.search(r"([\d.,]+)\s*Ergebnisse", summary_text)
+        if match:
+            clean_num = match.group(1).replace(".", "").replace(",", "")
+            return int(clean_num)
+        return 0
+    except Exception as e:
+        logger.warning(f"Fehler bei Live-Count Abfrage für '{query}': {e}")
+        return 0
 
 def parse_price(price_str: str) -> Optional[float]:
     """Wandelt einen Preis-String wie '120 € VB' oder '1.250 €' in eine Zahl um."""
@@ -97,200 +179,273 @@ def matches_keywords(
     search_criteria: Dict[str, Any],
     title: str,
     description: str,
-    ocr_text: str
+    ocr_text: str,
+    matched_term: Optional[str] = None
 ) -> Tuple[bool, str]:
     """Prüft, ob Suchbegriffe und Ausschlusskriterien erfüllt sind."""
-    raw_keywords = search_criteria.get("keywords", "") or ""
     case_sensitive = bool(search_criteria.get("case_sensitive", False))
     search_in_desc = bool(search_criteria.get("search_in_description", True))
 
-    # Textblöcke zusammenstellen
     title_check = title if case_sensitive else title.lower()
     desc_check = (description if case_sensitive else description.lower()) if search_in_desc else ""
     ocr_check = ocr_text if case_sensitive else ocr_text.lower()
 
-    # Zeilen- oder Komma-getrennte Suchbegriffe extrahieren
-    lines = [kw.strip() for kw in re.split(r"[,\n]+", raw_keywords) if kw.strip()]
+    terms = search_criteria.get("terms") or []
+    include_words = []
+    exclude_words = []
 
-    # Wenn keine spezifischen Keywords definiert wurden, gilt das Inserat als Treffer (wurde ja schon via Hauptsuche gefunden)
-    if not lines:
-        return True, "Treffer durch Hauptsuchbegriff"
+    if terms:
+        for t in terms:
+            txt = t.get("text", "").strip()
+            if not txt:
+                continue
+            if t.get("type") == "exclude":
+                exclude_words.append(txt)
+            else:
+                include_words.append(txt)
+    else:
+        raw_keywords = search_criteria.get("keywords", "") or ""
+        lines = [kw.strip() for kw in re.split(r"[,\n]+", raw_keywords) if kw.strip()]
+        for kw in lines:
+            if kw.startswith("-") or kw.startswith("!"):
+                exclude_words.append(kw[1:].strip())
+            else:
+                include_words.append(kw)
 
-    match_locations = []
-
-    for kw in lines:
-        is_negative = kw.startswith("-") or kw.startswith("!")
-        word = kw[1:].strip() if is_negative else kw
-        if not word:
+    # Ausschlussprüfung: Wenn irgendein Ausschlussbegriff vorkommt -> sofort verwerfen
+    for word in exclude_words:
+        target = word if case_sensitive else word.lower()
+        if not target:
             continue
-
-        target_word = word if case_sensitive else word.lower()
-
-        in_title = target_word in title_check
-        in_desc = target_word in desc_check if search_in_desc else False
-        in_ocr = target_word in ocr_check
-
-        found = in_title or in_desc or in_ocr
-
-        # Ausschlusskriterium (z.B. -defekt): Wenn gefunden, sofort aussortieren!
-        if is_negative and found:
+        if target in title_check or target in desc_check or target in ocr_check:
             return False, f"Ausgeschlossen durch Kriterium: '{word}'"
 
-        # Positives Kriterium: Muss vorkommen
-        if not is_negative:
-            if not found:
-                return False, f"Fehlendes Kriterium: '{word}'"
-            
-            # Dokumentieren, wo das Wort gefunden wurde
+    # Pflichtbegriffe (falls vorhanden)
+    match_locations = []
+    if matched_term:
+        match_locations.append(f"Suchbegriff '{matched_term}'")
+
+    for word in include_words:
+        target = word if case_sensitive else word.lower()
+        if not target:
+            continue
+        in_title = target in title_check
+        in_desc = target in desc_check if search_in_desc else False
+        in_ocr = target in ocr_check
+        if in_title or in_desc or in_ocr:
             if in_title:
                 match_locations.append(f"Titel ('{word}')")
             elif in_ocr:
                 match_locations.append(f"Bild-Text ('{word}')")
             elif in_desc:
                 match_locations.append(f"Beschreibung ('{word}')")
+        else:
+            if not terms and not matched_term:
+                return False, f"Fehlendes Kriterium: '{word}'"
 
     location_str = ", ".join(dict.fromkeys(match_locations))
     return True, f"Treffer in: {location_str}" if location_str else "Treffer durch Kriterien"
 
-def scrape_search(search: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Führt eine Suche auf Kleinanzeigen durch und gibt passende Inserate zurück."""
-    url = build_search_url(search)
-    headers = {
-        "User-Agent": DEFAULT_USER_AGENT,
-        "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": BASE_URL
-    }
+def parse_articles_from_soup(soup: BeautifulSoup) -> List[Dict[str, Any]]:
+    """Extrahiert Inserate aus dem HTML von Kleinanzeigen (unterstützt modernes und älteres Layout)."""
+    articles = soup.find_all("article", attrs={"data-adid": True})
+    if not articles:
+        articles = soup.find_all("article", class_="aditem")
+    if not articles:
+        articles = soup.find_all("li", class_="ad-listitem")
 
-    logger.info(f"Starte Suche '{search.get('name')}' unter URL: {url}")
-    try:
-        resp = requests.get(url, headers=headers, timeout=12)
-        if resp.status_code != 200:
-            logger.warning(f"Kleinanzeigen antwortete mit Status {resp.status_code}")
-            return []
+    results = []
 
-        soup = BeautifulSoup(resp.text, "html.parser")
-    except Exception as e:
-        logger.error(f"Fehler bei Anfrage an Kleinanzeigen: {e}")
-        return []
-
-    # Artikel extrahieren (Kleinanzeigen Struktur: <article class="aditem" ...>)
-    ad_items = soup.find_all("article", class_="aditem")
-    if not ad_items:
-        # Fallback falls andere Klassen verwendet werden
-        ad_items = soup.find_all("li", class_="ad-listitem")
-
-    matched_results = []
-
-    for item in ad_items:
+    for item in articles:
         try:
             adid = item.get("data-adid")
             if not adid:
-                # Versuche ID aus Link zu lesen
                 link_elem = item.find("a", href=re.compile(r"/s-anzeige/"))
                 if link_elem:
-                    match_id = re.search(r"/(\d+)-", link_elem.get("href", ""))
-                    adid = match_id.group(1) if match_id else None
-
+                    m = re.search(r"/(\d+)-", link_elem.get("href", ""))
+                    adid = m.group(1) if m else None
             if not adid:
                 continue
 
-            # Titel und Link
-            title_elem = item.find("h2") or item.find("a", class_="ellipsis")
-            if not title_elem:
-                continue
-            title = title_elem.get_text(strip=True)
-            
-            link = title_elem.find("a") if title_elem.name != "a" else title_elem
-            rel_url = link.get("href", "") if link else ""
+            rel_url = item.get("data-href") or ""
+            if not rel_url:
+                a_elem = item.find("a", href=re.compile(r"/s-anzeige/"))
+                if a_elem:
+                    rel_url = a_elem.get("href", "")
             full_url = BASE_URL + rel_url if rel_url.startswith("/") else rel_url
 
-            # Preis
-            price_elem = item.select_one(".aditem-main--middle--price-shipping--price")
-            price_text = price_elem.get_text(strip=True) if price_elem else ""
+            ld_data = {}
+            ld_script = item.find("script", type="application/ld+json")
+            if ld_script and ld_script.string:
+                try:
+                    ld_data = json.loads(ld_script.string)
+                except Exception:
+                    pass
+
+            title = ld_data.get("title") or ""
+            if not title:
+                t_elem = item.find("h3") or item.find("h2") or item.find("a", class_=re.compile("ellipsis"))
+                title = t_elem.get_text(strip=True) if t_elem else ""
+            if not title:
+                continue
+
+            thumbnail = ld_data.get("contentUrl") or ""
+            if not thumbnail:
+                img_elem = item.find("img")
+                if img_elem:
+                    thumbnail = img_elem.get("src") or img_elem.get("data-src") or ""
+
+            short_desc = ld_data.get("description") or ""
+            if not short_desc:
+                desc_elem = item.select_one(".aditem-main--middle--description") or item.find("p")
+                short_desc = desc_elem.get_text(strip=True) if desc_elem else ""
+
+            price_text = ""
+            p_elem = item.find("p", class_=re.compile(r"text-title3|price"))
+            if p_elem:
+                price_text = p_elem.get_text(strip=True)
+            if not price_text:
+                m_price = re.search(r"(\d+(?:[.]\d+)*(?:,\d+)?\s*€(?:\s*VB)?)", item.get_text())
+                if m_price:
+                    price_text = m_price.group(1)
+                elif "zu verschenken" in item.get_text().lower():
+                    price_text = "Zu verschenken"
+                elif "vb" in item.get_text().lower():
+                    price_text = "VB"
             numeric_price = parse_price(price_text)
 
-            # Preis-Filterprüfung
+            item_text = item.get_text().lower()
+            shipping_possible = "versand" in item_text
+
+            location_str = ""
+            loc_match = re.search(r"\b(\d{5}\s+[A-Za-zÄÖÜäöüß\s\-\/]+)", item.get_text())
+            if loc_match:
+                location_str = loc_match.group(1).split("\n")[0].strip()
+            if not location_str:
+                loc_elem = item.select_one(".aditem-main--top--left")
+                if loc_elem:
+                    location_str = loc_elem.get_text(separator=" ", strip=True)
+
+            results.append({
+                "adid": str(adid),
+                "title": title,
+                "price_text": price_text,
+                "numeric_price": numeric_price,
+                "shipping_possible": shipping_possible,
+                "location": location_str,
+                "thumbnail": thumbnail,
+                "url": full_url,
+                "description": short_desc
+            })
+        except Exception as e:
+            logger.warning(f"Fehler beim Parsen eines Inserats: {e}")
+            continue
+
+    return results
+
+def scrape_search(search: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Führt eine Suche auf Kleinanzeigen mit allen Such- & Ausschlussbegriffen durch."""
+    terms = search.get("terms") or []
+    include_terms = [t["text"].strip() for t in terms if t.get("type") == "include" and t.get("text", "").strip()]
+    exclude_terms = [t["text"].strip() for t in terms if t.get("type") == "exclude" and t.get("text", "").strip()]
+
+    if not include_terms and search.get("query"):
+        include_terms = [search["query"].strip()]
+
+    search_queries = include_terms if include_terms else [""]
+    all_matched = {}
+
+    for query_term in search_queries:
+        url = build_search_url_for_query(
+            query=query_term,
+            min_price=search.get("min_price"),
+            max_price=search.get("max_price"),
+            postal_code=search.get("postal_code", ""),
+            radius=search.get("radius", 0)
+        )
+        logger.info(f"Suche '{search.get('name')}' - Abruf Begriff '{query_term}' unter: {url}")
+
+        try:
+            resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=12)
+            if resp.status_code != 200:
+                logger.warning(f"Kleinanzeigen antwortete mit Status {resp.status_code} für '{query_term}'")
+                continue
+
+            soup = BeautifulSoup(resp.text, "html.parser")
+            parsed_items = parse_articles_from_soup(soup)
+            logger.info(f"Gefundene Anzeigen auf Seite für '{query_term}': {len(parsed_items)}")
+        except Exception as e:
+            logger.error(f"Fehler bei Anfrage an Kleinanzeigen für '{query_term}': {e}")
+            continue
+
+        for ad in parsed_items:
+            adid = ad["adid"]
+            if adid in all_matched:
+                continue
+
+            # Preis-Filter
             min_p = search.get("min_price")
             max_p = search.get("max_price")
-            if numeric_price is not None:
-                if min_p is not None and numeric_price < float(min_p):
+            num_p = ad["numeric_price"]
+            if num_p is not None:
+                if min_p is not None and str(min_p).strip() != "" and num_p < float(min_p):
                     continue
-                if max_p is not None and numeric_price > float(max_p):
+                if max_p is not None and str(max_p).strip() != "" and num_p > float(max_p):
                     continue
 
-            # Versand-Prüfung
-            shipping_elem = item.select_one(".aditem-main--middle--price-shipping--shipping")
-            shipping_text = shipping_elem.get_text(strip=True) if shipping_elem else ""
-            shipping_possible = "versand" in shipping_text.lower()
-
+            # Versand-Filter
             shipping_pref = search.get("shipping_type", "all")
-            if shipping_pref == "shipping_only" and not shipping_possible:
+            if shipping_pref == "shipping_only" and not ad["shipping_possible"]:
                 continue
-            if shipping_pref == "pickup_only" and shipping_possible:
+            if shipping_pref == "pickup_only" and ad["shipping_possible"]:
                 continue
 
-            # Standort & Entfernung
-            loc_elem = item.select_one(".aditem-main--top--left")
-            location_str = loc_elem.get_text(separator=" ", strip=True) if loc_elem else ""
-
-            # Vorschaubild
-            img_elem = item.select_one(".imagebox img")
-            thumbnail = ""
-            if img_elem:
-                thumbnail = img_elem.get("src") or img_elem.get("data-src") or ""
-
-            # Vorschau-Beschreibung
-            desc_elem = item.select_one(".aditem-main--middle--description")
-            short_desc = desc_elem.get_text(strip=True) if desc_elem else ""
-
-            # Detailseite laden (falls Beschreibung oder OCR aktiviert ist)
-            full_description = short_desc
-            all_images = [thumbnail] if thumbnail else []
+            full_description = ad["description"]
+            all_images = [ad["thumbnail"]] if ad["thumbnail"] else []
             ocr_text = ""
 
             need_details = search.get("search_in_description") or search.get("ocr_images")
-            if need_details and full_url:
-                detailed_desc, detailed_images = fetch_ad_details(full_url, headers)
+            if need_details and ad["url"]:
+                detailed_desc, detailed_images = fetch_ad_details(ad["url"], DEFAULT_HEADERS)
                 if detailed_desc:
                     full_description = detailed_desc
                 if detailed_images:
                     all_images = detailed_images
 
-            # OCR / Bildanalyse durchführen falls gewünscht
             if search.get("ocr_images") and all_images:
                 ocr_text = analyze_listing_images(all_images, max_images=3)
 
-            # Suchkriterien prüfen
             is_match, reason = matches_keywords(
                 search_criteria=search,
-                title=title,
+                title=ad["title"],
                 description=full_description,
-                ocr_text=ocr_text
+                ocr_text=ocr_text,
+                matched_term=query_term
             )
 
             if not is_match:
                 continue
 
-            matched_results.append({
+            all_matched[adid] = {
                 "search_id": search["id"],
                 "kleinanzeigen_id": str(adid),
-                "title": title,
-                "price": price_text,
-                "price_num": numeric_price,
-                "location": location_str,
-                "shipping_possible": shipping_possible,
-                "url": full_url,
-                "thumbnail_url": thumbnail or (all_images[0] if all_images else ""),
+                "title": ad["title"],
+                "price": ad["price_text"],
+                "price_num": ad["numeric_price"],
+                "location": ad["location"],
+                "shipping_possible": ad["shipping_possible"],
+                "url": ad["url"],
+                "thumbnail_url": ad["thumbnail"] or (all_images[0] if all_images else ""),
                 "images": all_images,
                 "description": full_description,
                 "ocr_text": ocr_text,
                 "match_reason": reason,
                 "status": "new",
                 "search_name": search.get("name")
-            })
+            }
 
-        except Exception as e:
-            logger.warning(f"Fehler beim Verarbeiten eines Kleinanzeigen-Elements: {e}")
-            continue
+        if len(search_queries) > 1:
+            time.sleep(random.uniform(0.6, 1.2))
 
-    return matched_results
+    return list(all_matched.values())
+
