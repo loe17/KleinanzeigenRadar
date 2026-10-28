@@ -131,6 +131,7 @@ async def api_preview_count(
 async def api_create_search(data: SearchCreateUpdate, bg: BackgroundTasks):
     search_dict = data.model_dump()
     new_id = create_search(search_dict)
+    watcher_service.set_scan_progress(new_id, is_scanning=True, progress=5, step_text="Suchlauf wird vorbereitet...", found_count=0, total_ads=0)
     # Neue Suche direkt einmal im Hintergrund ausführen
     bg.add_task(watcher_service.execute_search_now, new_id)
     return {"id": new_id, "success": True}
@@ -142,6 +143,10 @@ async def api_get_search(search_id: int):
         raise HTTPException(status_code=404, detail="Suchauftrag nicht gefunden")
     return search
 
+@app.get("/api/searches/{search_id}/progress")
+async def api_get_search_progress(search_id: int):
+    return watcher_service.get_scan_progress(search_id)
+
 @app.put("/api/searches/{search_id}")
 async def api_update_search(search_id: int, data: SearchCreateUpdate, bg: BackgroundTasks):
     search = get_search(search_id)
@@ -150,6 +155,7 @@ async def api_update_search(search_id: int, data: SearchCreateUpdate, bg: Backgr
     update_search(search_id, data.model_dump())
     # Vorhandene Treffer entfernen und Suche mit neuen Kriterien sofort neu ausführen
     clear_results(search_id)
+    watcher_service.set_scan_progress(search_id, is_scanning=True, progress=5, step_text="Kriterien aktualisiert, starte Suchlauf...", found_count=0, total_ads=0)
     bg.add_task(watcher_service.execute_search_now, search_id)
     return {"success": True}
 
@@ -165,6 +171,7 @@ async def api_run_search(search_id: int, bg: BackgroundTasks, clear_existing: bo
         raise HTTPException(status_code=404, detail="Suchauftrag nicht gefunden")
     if clear_existing:
         clear_results(search_id)
+    watcher_service.set_scan_progress(search_id, is_scanning=True, progress=5, step_text="Suche manuell ausgelöst...", found_count=0, total_ads=0)
     bg.add_task(watcher_service.execute_search_now, search_id)
     return {"success": True, "message": "Treffer entfernt und Suche im Hintergrund gestartet"}
 

@@ -4,7 +4,7 @@ import random
 import logging
 import json
 import urllib.parse
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Callable
 import requests
 from bs4 import BeautifulSoup
 
@@ -191,6 +191,8 @@ def compile_keyword_pattern(term: str, case_sensitive: bool = False) -> re.Patte
       15*         -> Sucht '15' am Wortanfang (z. B. '15Zoll', '15cm')
       *15         -> Sucht '15' am Wortende (z. B. 'XPS15')
       15          -> Sucht das eigenständige Wort '15' (Wortgrenzen auf beiden Seiten)
+      *16*GB      -> Findet '16GB', '16 GB', '16-GB', 'RAM: 16 GB', '16 GB RAM'
+      16GB / 16 GB-> Automatische Toleranz für optionale Leerzeichen zwischen Zahl & Einheit
       *defekt*    -> Findet 'Teildefekt', 'defekt', 'Defektgerät'
       defekt      -> Findet nur 'defekt', aber nicht 'Teildefekt'
       Dell Lat*   -> Findet 'Dell Latitude'
@@ -215,10 +217,13 @@ def compile_keyword_pattern(term: str, case_sensitive: bool = False) -> re.Patte
         if not p:
             continue
         p_esc = re.escape(p).replace(r"\?", r".")
+        # Automatische Toleranz für optionale Leerzeichen zwischen Zahlen und Einheiten (z. B. 16GB -> 16\s*GB)
+        p_esc = re.sub(r"(\d+)\\?([a-zA-Z]+)", r"\1\\s*\2", p_esc)
+        p_esc = re.sub(r"(\d+)\\\s+([a-zA-Z]+)", r"\1\\s*\2", p_esc)
         p_esc = re.sub(r"\\\s+", r"\\s+", p_esc)
         escaped_parts.append(p_esc)
         
-    inner = r".*?".join(escaped_parts)
+    inner = r".{0,15}?".join(escaped_parts)
     pattern_str = f"{prefix}{inner}{suffix}"
     flags = 0 if case_sensitive else re.IGNORECASE
     return re.compile(pattern_str, flags)
@@ -417,7 +422,11 @@ def parse_articles_from_soup(soup: BeautifulSoup) -> List[Dict[str, Any]]:
 
     return results
 
-def scrape_search(search: Dict[str, Any]) -> List[Dict[str, Any]]:
+def scrape_search(
+    search: Dict[str, Any],
+    on_ad_found: Optional[Callable[[Dict[str, Any]], None]] = None,
+    on_progress: Optional[Callable[[int, str, int, int], None]] = None
+) -> List[Dict[str, Any]]:
     """Führt eine Suche auf Kleinanzeigen mit allen Such- & Ausschlussbegriffen durch."""
     terms = search.get("terms") or []
     include_terms = [t["text"].strip() for t in terms if t.get("type") == "include" and t.get("text", "").strip()]
@@ -434,21 +443,19 @@ def scrape_search(search: Dict[str, Any]) -> List[Dict[str, Any]]:
         clean_terms = [t for t in clean_terms if t]
 
         if clean_terms:
-            # 1. Hauptabfrage mit allen Begriffen kombiniert (z. B. "Dell Latitude 15")
+            # Hauptabfrage mit allen Kernbegriffen kombiniert (z. B. "Lenovo T480")
             combined = " ".join(clean_terms)
             search_queries.append(combined)
-
-            # 2. Wenn Foto-Texterkennung aktiv ist und mehrere Begriffe existieren,
-            #    auch die einzelnen Begriffe abfragen, falls ein Begriff nur auf dem Typenschild-Foto steht
-            if search.get("ocr_images") and len(clean_terms) > 1:
-                for it in clean_terms:
-                    if it not in search_queries:
-                        search_queries.append(it)
         else:
             search_queries = [""]
     else:
         search_queries = [""]
+
     all_matched = {}
+
+    if on_progress:
+        display_q = search_queries[0] if search_queries and search_queries[0] else search.get("name", "Suchauftrag")
+        on_progress(10, f"Frage Kleinanzeigen nach '{display_q}' ab...", 0, 0)
 
     for query_term in search_queries:
         url = build_search_url_for_query(
@@ -473,10 +480,18 @@ def scrape_search(search: Dict[str, Any]) -> List[Dict[str, Any]]:
             logger.error(f"Fehler bei Anfrage an Kleinanzeigen für '{query_term}': {e}")
             continue
 
-        for ad in parsed_items:
+        total_items = len(parsed_items)
+        if on_progress:
+            on_progress(25, f"{total_items} Inserate auf Kleinanzeigen geladen. Prüfe Kriterien...", len(all_matched), total_items)
+
+        for idx, ad in enumerate(parsed_items, 1):
             adid = ad["adid"]
             if adid in all_matched:
                 continue
+
+            pct = 25 + int((idx / max(1, total_items)) * 70)
+            if on_progress:
+                on_progress(pct, f"Prüfe Inserat {idx} von {total_items}...", len(all_matched), total_items)
 
             # Preis-Filter
             min_p = search.get("min_price")
@@ -545,7 +560,7 @@ def scrape_search(search: Dict[str, Any]) -> List[Dict[str, Any]]:
             if not is_match:
                 continue
 
-            all_matched[adid] = {
+            ad_item = {
                 "search_id": search["id"],
                 "kleinanzeigen_id": str(adid),
                 "title": ad["title"],
@@ -563,9 +578,20 @@ def scrape_search(search: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "search_name": search.get("name"),
                 "published_date": published_date
             }
+            all_matched[adid] = ad_item
+
+            # Sofort an Callback übergeben (Streaming in die Datenbank)
+            if on_ad_found:
+                try:
+                    on_ad_found(ad_item)
+                except Exception as e_cb:
+                    logger.warning(f"Fehler in on_ad_found Callback: {e_cb}")
 
         if len(search_queries) > 1:
             time.sleep(random.uniform(0.6, 1.2))
+
+    if on_progress:
+        on_progress(100, f"Suchlauf abgeschlossen: {len(all_matched)} Treffer gefunden.", len(all_matched), len(all_matched))
 
     return list(all_matched.values())
 

@@ -31,6 +31,8 @@ function initIcons() {
   if (addTermIcon) addTermIcon.innerHTML = getSvgIcon("plus", 14);
   const livePreviewIcon = document.getElementById("icon-live-preview");
   if (livePreviewIcon) livePreviewIcon.innerHTML = getSvgIcon("search", 14);
+  const progressSpinnerIcon = document.getElementById("progress-spinner-icon");
+  if (progressSpinnerIcon) progressSpinnerIcon.innerHTML = getSvgIcon("spinner", 14);
 
   document.getElementById("icon-nav-all").innerHTML = getSvgIcon("inbox", 15);
   document.getElementById("icon-nav-new").innerHTML = getSvgIcon("sparkles", 15);
@@ -250,9 +252,26 @@ function setNavFilter(status, searchId) {
   if (searchId) {
     const el = document.getElementById(`search-nav-${searchId}`);
     if (el) el.classList.add("active");
+
+    // Prüfen, ob für diesen Suchauftrag gerade ein Scan aktiv ist
+    fetch(`/api/searches/${searchId}/progress`)
+      .then(res => res.json())
+      .then(prog => {
+        if (prog && prog.is_scanning && activeSearchId === searchId) {
+          pollForResults(searchId);
+        } else if (activeSearchId === searchId) {
+          showProgressBar(false);
+        }
+      })
+      .catch(() => {});
   } else {
     const el = document.getElementById(`nav-${status}`);
     if (el) el.classList.add("active");
+    showProgressBar(false);
+    if (currentProgressInterval) {
+      clearInterval(currentProgressInterval);
+      currentProgressInterval = null;
+    }
   }
 
   updateHeaderInfo();
@@ -815,18 +834,89 @@ async function editSearch(event, id) {
   if (s) openSearchModal(s);
 }
 
+let currentProgressInterval = null;
+
+function showProgressBar(show) {
+  const container = document.getElementById("search-progress-bar-container");
+  if (container) {
+    container.style.display = show ? "block" : "none";
+  }
+}
+
+function updateProgressBar(data) {
+  const percentEl = document.getElementById("search-progress-percent");
+  const fillEl = document.getElementById("search-progress-fill");
+  const statusEl = document.getElementById("search-progress-status");
+  const countEl = document.getElementById("search-progress-count");
+
+  const progress = Math.max(0, Math.min(100, Math.round(data.progress || 0)));
+  if (percentEl) percentEl.innerText = `${progress}%`;
+  if (fillEl) fillEl.style.width = `${progress}%`;
+  if (statusEl && data.status) statusEl.innerText = data.status;
+  if (countEl) {
+    const count = data.found_count || 0;
+    countEl.innerText = t("scan_matches_found").replace("{count}", count);
+  }
+}
+
 function pollForResults(searchId) {
+  if (currentProgressInterval) {
+    clearInterval(currentProgressInterval);
+    currentProgressInterval = null;
+  }
+
+  showProgressBar(true);
+  updateProgressBar({
+    progress: 5,
+    status: t("scan_connecting"),
+    found_count: 0
+  });
+
   let attempts = 0;
-  const maxAttempts = 12;
-  const interval = setInterval(async () => {
+  const maxAttempts = 120;
+
+  currentProgressInterval = setInterval(async () => {
     attempts++;
-    await loadSearches(false);
-    await loadResults(false);
-    loadStats();
-    if (allResults.length > 0 || attempts >= maxAttempts) {
-      clearInterval(interval);
+    try {
+      const res = await fetch(`/api/searches/${searchId}/progress`);
+      if (!res.ok) {
+        clearInterval(currentProgressInterval);
+        currentProgressInterval = null;
+        return;
+      }
+      const data = await res.json();
+      updateProgressBar(data);
+
+      if (activeSearchId === searchId || !activeSearchId) {
+        await loadResults(false);
+        loadStats();
+      }
+
+      if (!data.is_scanning && data.progress >= 100) {
+        clearInterval(currentProgressInterval);
+        currentProgressInterval = null;
+        await loadSearches(false);
+        await loadResults(false);
+        loadStats();
+
+        setTimeout(() => {
+          showProgressBar(false);
+        }, 2500);
+      }
+    } catch (err) {
+      console.error("Fehler beim Abrufen des Suchfortschritts:", err);
     }
-  }, 1200);
+
+    if (attempts >= maxAttempts) {
+      if (currentProgressInterval) {
+        clearInterval(currentProgressInterval);
+        currentProgressInterval = null;
+      }
+      setTimeout(() => {
+        showProgressBar(false);
+      }, 2000);
+    }
+  }, 750);
 }
 
 async function runSearchNow(event, id) {

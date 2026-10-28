@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-0.1.8-86b817.svg" alt="Version 0.1.8">
+  <img src="https://img.shields.io/badge/Version-0.1.9-86b817.svg" alt="Version 0.1.9">
   <img src="https://img.shields.io/badge/Domain-kleinanzeigenradar.local-purple.svg" alt="Local Domain">
   <img src="https://img.shields.io/badge/Sicherheit-HTTPS%20%7C%20SSL-green.svg" alt="HTTPS">
   <img src="https://img.shields.io/badge/Plattform-Linux%20%7C%20Docker-blue.svg" alt="Linux & Docker">
@@ -64,6 +64,9 @@ Normale Suchen auf Kleinanzeigen sind oft ungenau oder verpassen Schnäppchen, w
 
 * **Lokale Domain & HTTPS:** Direkt im Heimnetzwerk unter `https://kleinanzeigenradar.local` mit automatisch generiertem SSL-Zertifikat erreichbar.
 * **Automatische Port-Erkennung:** Sollte ein Standardport (z. B. 8000 oder 8443) bereits durch andere Dienste belegt sein, sucht das System vollautomatisch den nächsten freien Port.
+* **Live-Suchfortschritt & Ladeleiste:** Bei jedem manuellen Start oder Aktualisieren eines Suchauftrags visualisiert ein animierter Ladebalken (0–100%) über der Trefferliste den aktuellen Status, den Fortschritt und die Anzahl gefundener Inserate in Echtzeit.
+* **Echtzeit-Treffer-Streaming:** Gefundene Inserate werden sofort beim Erkennen einzeln in der Datenbank gesichert und erscheinen ohne Wartezeit direkt live auf deiner Oberfläche.
+* **Erweiterte Teilwort- & Einheitensuche (`*16*GB`):** Intelligente Wortteil-Suche mit automatischer Leerzeichen- und Einheitentoleranz. Suchbegriffe wie `*16*GB` finden `16GB`, `16 GB`, `16-GB`, `RAM: 16 GB` und `16 GB RAM` gleichermaßen.
 * **Präzise Treffer-Aufschlüsselung:** Zeigt dir genau an, was wo gefunden wurde (z. B. `Titel ('Lenovo', 'T480') • Beschreibung: '16' (...16 GB RAM...)`), inklusive relevantem Textausschnitt.
 * **Vollständige Beschreibung & Fotogalerie per Klick:** Mit einem Klick auf die Anzeige öffnet sich sofort das Detailfenster mit der vollständigen Artikelbeschreibung und vergrößerbaren Originalfotos. Zusätzlich zeigt die Karte eine 2-zeilige Textvorschau.
 * **Online-Dauer & Preisverlauf:** Erkennt transparent, wie lange Inserate schon online sind (`vor 2 Std.`, `Heute, 14:23`) und dokumentiert Preissenkungen mit durchgestrichenem Altpreis und Ersparnis (`~~200 €~~ 160 € (-40 €)`). Im Detailfenster siehst du den gesamten Preisverlauf.
@@ -122,7 +125,7 @@ Das Skript stoppt alle Dienste oder Container sauber und fragt dich, ob deine bi
 ```text
 KleinanzeigenRadar/
 ├── app/
-│   ├── config.py           # Konfiguration, Pfade & Version 0.1.8
+│   ├── config.py           # Konfiguration, Pfade & Version 0.1.9
 │   ├── database.py         # Schnelle SQLite-Datenbank, Preisverlauf & relative Zeit
 │   ├── network_utils.py    # Automatische Suche nach freien Ports & IPs
 │   ├── ssl_cert.py         # Automatische SSL-Zertifikatsgenerierung (HTTPS)

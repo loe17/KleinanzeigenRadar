@@ -119,6 +119,24 @@
         </select>
       </div>
 
+      <!-- Live Suchfortschritt / Ladeleiste -->
+      <div id="search-progress-bar-container" style="display: none; margin-bottom: 20px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px 18px; box-shadow: var(--shadow-sm);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13.5px; color: var(--text);">
+            <span class="icon-wrap" id="progress-spinner-icon"></span>
+            <span id="search-progress-title" data-i18n="search_in_progress">Suchlauf aktiv...</span>
+          </div>
+          <span id="search-progress-percent" style="font-weight: 700; font-size: 13px; color: var(--primary);">0%</span>
+        </div>
+        <div style="width: 100%; height: 8px; background: var(--bg-subtle); border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+          <div id="search-progress-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #86b817, #22c55e); border-radius: 4px; transition: width 0.3s ease;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary);">
+          <span id="search-progress-status">Verbinde mit Kleinanzeigen...</span>
+          <span id="search-progress-count" style="font-weight: 500;">0 Treffer gefunden</span>
+        </div>
+      </div>
+
       <!-- Treffer-Raster -->
       <div class="results-container" id="results-container">
         <!-- Dynamischer Inhalt -->
@@ -163,7 +181,7 @@
                 <span data-i18n="btn_add_term">Hinzufügen</span>
               </button>
             </div>
-            <div class="form-hint" data-i18n="hint_terms_section">Suchbegriffe (grün) werden gesucht. Tipp: Nutze Sternchen (*) wie *15* für Wortteile (z. B. 15Zoll oder XPS15). Ausschlussbegriffe (rot) wie -*defekt* filtern auch Teilwörter (z. B. Teildefekt) heraus.</div>
+            <div class="form-hint" data-i18n="hint_terms_section">Suchbegriffe (grün) werden gesucht. Tipp: Nutze Sternchen (*) wie *15* für Wortteile (z. B. 15Zoll) oder *16*GB, um 16GB, 16 GB sowie RAM: 16 GB zu finden. Ausschlussbegriffe (rot) wie -*defekt* filtern auch Teilwörter (z. B. Teildefekt) heraus.</div>
 
             <!-- Liste der hinterlegten Begriffe -->
             <div class="terms-container" id="terms-list-container">

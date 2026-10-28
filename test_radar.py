@@ -323,6 +323,51 @@ class TestKleinanzeigenRadar(unittest.TestCase):
         m7, _ = matches_keywords(search_wild_ex, "Dell Latitude", "Teildefekt fuer Bastler", "")
         self.assertFalse(m7)
 
+        # Flexible sub-word / unit matching (*16*GB matches 16GB, 16 GB, RAM: 16 GB)
+        search_unit_wild = {
+            "terms": [
+                {"text": "Lenovo", "type": "include"},
+                {"text": "*16*GB", "type": "include"}
+            ],
+            "case_sensitive": False,
+            "search_in_description": True
+        }
+        m8, _ = matches_keywords(search_unit_wild, "Lenovo T480 16GB", "", "")
+        self.assertTrue(m8)
+        m9, _ = matches_keywords(search_unit_wild, "Lenovo T480", "Ausstattung: 16 GB Arbeitsspeicher", "")
+        self.assertTrue(m9)
+        m10, _ = matches_keywords(search_unit_wild, "Lenovo T480", "RAM: 16 GB DDR4", "")
+        self.assertTrue(m10)
+        m11, _ = matches_keywords(search_unit_wild, "Lenovo T480 8GB RAM", "", "")
+        self.assertFalse(m11)
+
+        # Automatic space tolerance between numbers and units (16GB matches 16 GB)
+        search_unit_norm = {
+            "terms": [
+                {"text": "Lenovo", "type": "include"},
+                {"text": "16GB", "type": "include"}
+            ],
+            "case_sensitive": False,
+            "search_in_description": True
+        }
+        m12, _ = matches_keywords(search_unit_norm, "Lenovo Laptop 16 GB", "", "")
+        self.assertTrue(m12)
+
+    def test_scan_progress_tracking(self):
+        from app.watcher import get_scan_progress, set_scan_progress
+        # Default empty progress
+        prog = get_scan_progress(99999)
+        self.assertFalse(prog["is_scanning"])
+        self.assertEqual(prog["progress"], 100)
+
+        # Set progress
+        set_scan_progress(99999, 50, "Prüfe Anzeige 5 von 10...", is_scanning=True, found_count=2)
+        prog_updated = get_scan_progress(99999)
+        self.assertTrue(prog_updated["is_scanning"])
+        self.assertEqual(prog_updated["progress"], 50)
+        self.assertEqual(prog_updated["found_count"], 2)
+        self.assertIn("5 von 10", prog_updated["status"])
+
     def test_relative_time_formatting(self):
         from app.database import format_relative_time
         self.assertEqual(format_relative_time("Heute, 14:30"), "Heute, 14:30")
@@ -393,10 +438,10 @@ class TestKleinanzeigenRadar(unittest.TestCase):
 
     def test_updater_module(self):
         from app.config import VERSION
-        self.assertEqual(VERSION, "0.1.8")
+        self.assertEqual(VERSION, "0.1.9")
         update_info = check_for_github_update()
         self.assertIn("current_version", update_info)
-        self.assertEqual(update_info["current_version"], "0.1.8")
+        self.assertEqual(update_info["current_version"], "0.1.9")
 
 if __name__ == "__main__":
     unittest.main()
