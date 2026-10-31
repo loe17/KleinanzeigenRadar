@@ -1,5 +1,7 @@
 import os
+import json
 import logging
+from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Optional, Dict, Any, List
 
@@ -25,12 +27,18 @@ from app.database import (
     save_settings,
     clear_results,
     get_result_by_id,
-    update_result_details
+    update_result_details,
+    update_result_notes,
+    update_result_deal_score,
+    update_result_safety_score,
+    update_result_negotiation,
+    recheck_existing_results_for_search
 )
 from app.scraper import fetch_live_result_count, fetch_ad_details, DEFAULT_HEADERS
 from app.watcher import watcher_service
 from app.notifier import test_telegram_connection, test_email_connection
 from app.updater import check_for_github_update, perform_update, schedule_restart
+from app.ai_engine import evaluate_deal_score, evaluate_safety_risk, generate_negotiation_reply
 
 # Logging konfigurieren
 logging.basicConfig(
@@ -81,20 +89,40 @@ class SearchCreateUpdate(BaseModel):
     notify_email: Optional[bool] = True
     is_active: Optional[bool] = True
     interval_minutes: Optional[int] = 15
+    platform: Optional[str] = "both"
 
 class StatusUpdate(BaseModel):
     status: str  # 'new', 'starred', 'dismissed', 'read'
+
+class NoteUpdate(BaseModel):
+    notes: str
+
+class NegotiationStepRequest(BaseModel):
+    target_price: Optional[float] = None
+    style: Optional[str] = "freundlich"
+    stop_condition: Optional[str] = ""
+    seller_message: Optional[str] = ""
 
 # --- HTML Web-Oberfläche ---
 
 @app.get("/", response_class=HTMLResponse)
 async def index_page(request: Request):
+    try:
+        init_searches = get_all_searches()
+        init_results = get_results(limit=60)
+        init_stats = get_stats()
+    except Exception:
+        init_searches, init_results, init_stats = [], [], {}
+
     return templates.TemplateResponse(
         request=request,
         name="index.html",
         context={
             "app_name": APP_NAME,
-            "version": VERSION
+            "version": VERSION,
+            "searches_json": json.dumps(init_searches, ensure_ascii=False),
+            "results_json": json.dumps(init_results, ensure_ascii=False),
+            "stats_json": json.dumps(init_stats, ensure_ascii=False)
         }
     )
 
@@ -153,11 +181,12 @@ async def api_update_search(search_id: int, data: SearchCreateUpdate, bg: Backgr
     if not search:
         raise HTTPException(status_code=404, detail="Suchauftrag nicht gefunden")
     update_search(search_id, data.model_dump())
-    # Vorhandene Treffer entfernen und Suche mit neuen Kriterien sofort neu ausführen
-    clear_results(search_id)
-    watcher_service.set_scan_progress(search_id, is_scanning=True, progress=5, step_text="Kriterien aktualisiert, starte Suchlauf...", found_count=0, total_ads=0)
+    # Kriterien aktualisieren und bestehende Treffer erneut validieren (kein Datenverlust für passende Anzeigen!)
+    removed_count = recheck_existing_results_for_search(search_id)
+    logger.info(f"Suchauftrag {search_id} aktualisiert: {removed_count} unpassende Inserate bereinigt, passende Treffer erhalten.")
+    watcher_service.set_scan_progress(search_id, is_scanning=True, progress=5, step_text="Kriterien aktualisiert, prüfe neue Treffer...", found_count=0, total_ads=0)
     bg.add_task(watcher_service.execute_search_now, search_id)
-    return {"success": True}
+    return {"success": True, "removed_obsolete": removed_count}
 
 @app.delete("/api/searches/{search_id}")
 async def api_delete_search(search_id: int):
@@ -165,7 +194,7 @@ async def api_delete_search(search_id: int):
     return {"success": True}
 
 @app.post("/api/searches/{search_id}/run")
-async def api_run_search(search_id: int, bg: BackgroundTasks, clear_existing: bool = True):
+async def api_run_search(search_id: int, bg: BackgroundTasks, clear_existing: bool = False):
     search = get_search(search_id)
     if not search:
         raise HTTPException(status_code=404, detail="Suchauftrag nicht gefunden")
@@ -173,7 +202,7 @@ async def api_run_search(search_id: int, bg: BackgroundTasks, clear_existing: bo
         clear_results(search_id)
     watcher_service.set_scan_progress(search_id, is_scanning=True, progress=5, step_text="Suche manuell ausgelöst...", found_count=0, total_ads=0)
     bg.add_task(watcher_service.execute_search_now, search_id)
-    return {"success": True, "message": "Treffer entfernt und Suche im Hintergrund gestartet"}
+    return {"success": True, "message": "Suche im Hintergrund gestartet"}
 
 # --- API: Ergebnisse ---
 
@@ -181,6 +210,7 @@ async def api_run_search(search_id: int, bg: BackgroundTasks, clear_existing: bo
 async def api_get_results(
     search_id: Optional[int] = None,
     status: Optional[str] = None,
+    platform_filter: Optional[str] = None,
     shipping_filter: Optional[str] = None,
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
@@ -201,6 +231,7 @@ async def api_get_results(
     return get_results(
         search_id=search_id,
         status=status,
+        platform_filter=platform_filter,
         shipping_filter=shipping_filter,
         min_price=effective_min,
         max_price=effective_max,
@@ -221,6 +252,14 @@ async def api_mark_all_read(search_id: Optional[int] = None):
     mark_all_results_as_read(search_id)
     return {"success": True}
 
+@app.post("/api/results/{result_id}/notes")
+async def api_update_notes(result_id: int, data: NoteUpdate):
+    res = get_result_by_id(result_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Inserat nicht gefunden")
+    update_result_notes(result_id, data.notes)
+    return {"success": True, "notes": data.notes}
+
 @app.get("/api/results/{result_id}/details")
 async def api_get_result_details(result_id: int):
     res = get_result_by_id(result_id)
@@ -229,8 +268,8 @@ async def api_get_result_details(result_id: int):
 
     desc = res.get("description") or ""
     images = res.get("images") or []
-    # Falls die Beschreibung noch unvollständig ist (< 100 Zeichen) oder Bilder fehlen, von Kleinanzeigen nachladen
-    if (len(desc) < 80 or len(images) <= 1) and res.get("url"):
+    # Falls die Beschreibung noch unvollständig ist (< 80 Zeichen) oder Bilder fehlen, von Kleinanzeigen nachladen
+    if (len(desc) < 80 or len(images) <= 1) and res.get("url") and res.get("platform") != "facebook":
         try:
             full_desc, new_images, pub_date = fetch_ad_details(res["url"], DEFAULT_HEADERS)
             updated = False
@@ -247,7 +286,137 @@ async def api_get_result_details(result_id: int):
         except Exception as e:
             logger.warning(f"Konnte Details für Inserat {result_id} nicht nachladen: {e}")
 
+    # Automatische KI-Deal- und Betrugs-Analyse, falls noch nicht erfolgt
+    if not res.get("deal_score") or not res.get("safety_score"):
+        try:
+            search = get_search(res["search_id"]) if res.get("search_id") else None
+            min_b = search.get("min_price") if search else None
+            max_b = search.get("max_price") if search else None
+            peers = [r["price_num"] for r in get_results(search_id=res.get("search_id"), limit=50) if r.get("price_num")]
+
+            if not res.get("deal_score"):
+                ds = evaluate_deal_score(
+                    title=res["title"],
+                    price=res.get("price_num"),
+                    description=desc,
+                    platform=res.get("platform", "kleinanzeigen"),
+                    min_budget=min_b,
+                    max_budget=max_b,
+                    peer_prices=peers
+                )
+                update_result_deal_score(result_id, ds)
+                res["deal_score"] = ds
+
+            if not res.get("safety_score"):
+                ss = evaluate_safety_risk(
+                    title=res["title"],
+                    price=res.get("price_num"),
+                    description=desc,
+                    platform=res.get("platform", "kleinanzeigen")
+                )
+                update_result_safety_score(result_id, ss)
+                res["safety_score"] = ss
+        except Exception as e_ai:
+            logger.warning(f"Fehler bei automatischer Deal/Safety Analyse für Inserat {result_id}: {e_ai}")
+
     return res
+
+@app.post("/api/results/{result_id}/evaluate-ai")
+async def api_evaluate_ai(result_id: int):
+    res = get_result_by_id(result_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Inserat nicht gefunden")
+
+    search = get_search(res["search_id"]) if res.get("search_id") else None
+    min_b = search.get("min_price") if search else None
+    max_b = search.get("max_price") if search else None
+    peers = [r["price_num"] for r in get_results(search_id=res.get("search_id"), limit=50) if r.get("price_num")]
+
+    deal_score = evaluate_deal_score(
+        title=res["title"],
+        price=res.get("price_num"),
+        description=res.get("description", ""),
+        platform=res.get("platform", "kleinanzeigen"),
+        min_budget=min_b,
+        max_budget=max_b,
+        peer_prices=peers
+    )
+
+    safety_score = evaluate_safety_risk(
+        title=res["title"],
+        price=res.get("price_num"),
+        description=res.get("description", ""),
+        platform=res.get("platform", "kleinanzeigen")
+    )
+
+    update_result_deal_score(result_id, deal_score)
+    update_result_safety_score(result_id, safety_score)
+
+    return {
+        "deal_score": deal_score,
+        "safety_score": safety_score
+    }
+
+@app.get("/api/results/{result_id}/negotiation")
+async def api_get_negotiation(result_id: int):
+    res = get_result_by_id(result_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Inserat nicht gefunden")
+    return res.get("negotiation") or {}
+
+@app.post("/api/results/{result_id}/negotiation/step")
+async def api_step_negotiation(result_id: int, data: NegotiationStepRequest):
+    res = get_result_by_id(result_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Inserat nicht gefunden")
+
+    neg = res.get("negotiation") or {}
+    history = list(neg.get("history") or [])
+    settings = get_settings()
+
+    if data.seller_message and data.seller_message.strip():
+        history.append({
+            "sender": "seller",
+            "text": data.seller_message.strip(),
+            "timestamp": datetime.now().strftime("%H:%M")
+        })
+
+    style = data.style or settings.get("ai_negotiation_style") or "freundlich"
+    target_price = data.target_price if data.target_price is not None else neg.get("target_price")
+    stop_condition = data.stop_condition if data.stop_condition is not None else neg.get("stop_condition", "")
+
+    reply_data = generate_negotiation_reply(
+        title=res["title"],
+        current_price=res.get("price_num"),
+        description=res.get("description", ""),
+        target_price=target_price,
+        style=style,
+        stop_condition=stop_condition,
+        chat_history=history,
+        latest_seller_message=data.seller_message or "",
+        ai_settings=settings
+    )
+
+    history.append({
+        "sender": "assistant",
+        "text": reply_data["reply_text"],
+        "strategy": reply_data.get("strategy", ""),
+        "timestamp": datetime.now().strftime("%H:%M")
+    })
+
+    neg_updated = {
+        "target_price": target_price,
+        "style": style,
+        "stop_condition": stop_condition,
+        "history": history,
+        "should_stop": reply_data.get("should_stop", False),
+        "stop_reason": reply_data.get("stop_reason", ""),
+        "target_reached": reply_data.get("target_reached", False),
+        "last_suggestion": reply_data["reply_text"]
+    }
+
+    update_result_negotiation(result_id, neg_updated)
+    return neg_updated
 
 # --- API: Einstellungen ---
 

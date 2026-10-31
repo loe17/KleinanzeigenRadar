@@ -39,11 +39,13 @@ def init_db():
     );
     """)
 
-    # Prüfen, ob Spalte terms_json existiert (falls Tabelle schon angelegt war)
+    # Prüfen, ob Spalten in searches existieren (Migration)
     cursor.execute("PRAGMA table_info(searches)")
     columns = [row[1] for row in cursor.fetchall()]
     if "terms_json" not in columns:
         cursor.execute("ALTER TABLE searches ADD COLUMN terms_json TEXT DEFAULT '[]'")
+    if "platform" not in columns:
+        cursor.execute("ALTER TABLE searches ADD COLUMN platform TEXT DEFAULT 'both'")
 
     # Tabelle für gefundene Inserate
     cursor.execute("""
@@ -78,6 +80,16 @@ def init_db():
         cursor.execute("ALTER TABLE results ADD COLUMN price_history TEXT DEFAULT '[]'")
     if "published_date" not in res_columns:
         cursor.execute("ALTER TABLE results ADD COLUMN published_date TEXT DEFAULT ''")
+    if "platform" not in res_columns:
+        cursor.execute("ALTER TABLE results ADD COLUMN platform TEXT DEFAULT 'kleinanzeigen'")
+    if "notes" not in res_columns:
+        cursor.execute("ALTER TABLE results ADD COLUMN notes TEXT DEFAULT ''")
+    if "deal_score_json" not in res_columns:
+        cursor.execute("ALTER TABLE results ADD COLUMN deal_score_json TEXT DEFAULT '{}'")
+    if "safety_score_json" not in res_columns:
+        cursor.execute("ALTER TABLE results ADD COLUMN safety_score_json TEXT DEFAULT '{}'")
+    if "negotiation_json" not in res_columns:
+        cursor.execute("ALTER TABLE results ADD COLUMN negotiation_json TEXT DEFAULT '{}'")
 
     # Tabelle für globale Einstellungen
     cursor.execute("""
@@ -99,7 +111,14 @@ def init_db():
         "email_from": "",
         "email_to": "",
         "global_interval_minutes": "15",
-        "github_repo": "loe17/KleinanzeigenRadar"
+        "github_repo": "loe17/KleinanzeigenRadar",
+        "ai_provider": "gemini",
+        "ai_api_key": "",
+        "ai_model": "gemini-1.5-flash",
+        "ai_ollama_url": "http://localhost:11434",
+        "ai_negotiation_style": "friendly",
+        "ai_custom_instructions": "",
+        "facebook_session_cookie": ""
     }
 
     for k, v in defaults.items():
@@ -115,6 +134,14 @@ def get_settings() -> Dict[str, str]:
     rows = conn.execute("SELECT key, value FROM settings").fetchall()
     conn.close()
     return {row["key"]: row["value"] or "" for row in rows}
+
+def get_setting(key: str, default: str = "") -> str:
+    conn = get_db()
+    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    conn.close()
+    if row and row["value"] is not None:
+        return row["value"]
+    return default
 
 def save_settings(new_settings: Dict[str, str]):
     conn = get_db()
@@ -200,6 +227,15 @@ def create_search(data: Dict[str, Any]) -> int:
         terms_list = []
         if query_val:
             terms_list.append({"text": query_val.strip(), "type": "include"})
+        if keywords_val:
+            for kw in re.split(r"[,;\n]+", keywords_val):
+                kw = kw.strip()
+                if not kw:
+                    continue
+                if kw.startswith("-") or kw.startswith("!"):
+                    terms_list.append({"text": kw[1:].strip(), "type": "exclude"})
+                else:
+                    terms_list.append({"text": kw, "type": "include"})
         terms_json = json.dumps(terms_list, ensure_ascii=False)
 
     cursor.execute("""
@@ -207,8 +243,8 @@ def create_search(data: Dict[str, Any]) -> int:
         name, query, keywords, terms_json, case_sensitive, search_in_description,
         ocr_images, min_price, max_price, postal_code, radius,
         shipping_type, notify_telegram, notify_email, is_active,
-        interval_minutes, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        interval_minutes, created_at, platform
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         data.get("name"),
         query_val,
@@ -226,7 +262,8 @@ def create_search(data: Dict[str, Any]) -> int:
         1 if data.get("notify_email", True) else 0,
         1 if data.get("is_active", True) else 0,
         data.get("interval_minutes", 15),
-        now
+        now,
+        data.get("platform", "both")
     ))
     search_id = cursor.lastrowid
     conn.commit()
@@ -250,6 +287,15 @@ def update_search(search_id: int, data: Dict[str, Any]):
         terms_list = []
         if query_val:
             terms_list.append({"text": query_val.strip(), "type": "include"})
+        if keywords_val:
+            for kw in re.split(r"[,;\n]+", keywords_val):
+                kw = kw.strip()
+                if not kw:
+                    continue
+                if kw.startswith("-") or kw.startswith("!"):
+                    terms_list.append({"text": kw[1:].strip(), "type": "exclude"})
+                else:
+                    terms_list.append({"text": kw, "type": "include"})
         terms_json = json.dumps(terms_list, ensure_ascii=False)
 
     cursor.execute("""
@@ -269,7 +315,8 @@ def update_search(search_id: int, data: Dict[str, Any]):
         notify_telegram = ?,
         notify_email = ?,
         is_active = ?,
-        interval_minutes = ?
+        interval_minutes = ?,
+        platform = ?
     WHERE id = ?
     """, (
         data.get("name"),
@@ -288,6 +335,7 @@ def update_search(search_id: int, data: Dict[str, Any]):
         1 if data.get("notify_email", True) else 0,
         1 if data.get("is_active", True) else 0,
         data.get("interval_minutes", 15),
+        data.get("platform", "both"),
         search_id
     ))
     conn.commit()
@@ -414,8 +462,9 @@ def save_result(result_data: Dict[str, Any]) -> Optional[int]:
             location, distance, shipping_possible, url, thumbnail_url,
             images_json, description, ocr_text, match_reason,
             status, notified_telegram, notified_email, found_at,
-            published_date, price_history
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            published_date, price_history, platform, notes,
+            deal_score_json, safety_score_json, negotiation_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             result_data["search_id"],
             result_data["kleinanzeigen_id"],
@@ -436,7 +485,12 @@ def save_result(result_data: Dict[str, Any]) -> Optional[int]:
             1 if result_data.get("notified_email") else 0,
             now_iso,
             result_data.get("published_date", ""),
-            json.dumps(initial_history, ensure_ascii=False)
+            json.dumps(initial_history, ensure_ascii=False),
+            result_data.get("platform", "kleinanzeigen"),
+            result_data.get("notes", ""),
+            json.dumps(result_data.get("deal_score") or {}, ensure_ascii=False),
+            json.dumps(result_data.get("safety_score") or {}, ensure_ascii=False),
+            json.dumps(result_data.get("negotiation") or {}, ensure_ascii=False)
         ))
         res_id = cursor.lastrowid
         conn.commit()
@@ -456,6 +510,30 @@ def update_result_details(result_id: int, description: str, images: List[str], o
     conn.commit()
     conn.close()
 
+def update_result_notes(result_id: int, notes: str):
+    conn = get_db()
+    conn.execute("UPDATE results SET notes = ? WHERE id = ?", (notes or "", result_id))
+    conn.commit()
+    conn.close()
+
+def update_result_deal_score(result_id: int, deal_score: Dict[str, Any]):
+    conn = get_db()
+    conn.execute("UPDATE results SET deal_score_json = ? WHERE id = ?", (json.dumps(deal_score, ensure_ascii=False), result_id))
+    conn.commit()
+    conn.close()
+
+def update_result_safety_score(result_id: int, safety_score: Dict[str, Any]):
+    conn = get_db()
+    conn.execute("UPDATE results SET safety_score_json = ? WHERE id = ?", (json.dumps(safety_score, ensure_ascii=False), result_id))
+    conn.commit()
+    conn.close()
+
+def update_result_negotiation(result_id: int, negotiation: Dict[str, Any]):
+    conn = get_db()
+    conn.execute("UPDATE results SET negotiation_json = ? WHERE id = ?", (json.dumps(negotiation, ensure_ascii=False), result_id))
+    conn.commit()
+    conn.close()
+
 def get_result_by_id(result_id: int) -> Optional[Dict[str, Any]]:
     conn = get_db()
     row = conn.execute("SELECT r.*, s.name as search_name FROM results r LEFT JOIN searches s ON r.search_id = s.id WHERE r.id = ?", (result_id,)).fetchone()
@@ -471,6 +549,20 @@ def get_result_by_id(result_id: int) -> Optional[Dict[str, Any]]:
         d["price_history"] = json.loads(d.get("price_history") or "[]")
     except Exception:
         d["price_history"] = []
+    try:
+        d["deal_score"] = json.loads(d.get("deal_score_json") or "{}")
+    except Exception:
+        d["deal_score"] = {}
+    try:
+        d["safety_score"] = json.loads(d.get("safety_score_json") or "{}")
+    except Exception:
+        d["safety_score"] = {}
+    try:
+        d["negotiation"] = json.loads(d.get("negotiation_json") or "{}")
+    except Exception:
+        d["negotiation"] = {}
+    d["notes"] = d.get("notes") or ""
+    d["platform"] = d.get("platform") or "kleinanzeigen"
     return d
 
 def get_results(
@@ -481,7 +573,8 @@ def get_results(
     max_price: Optional[float] = None,
     search_term: Optional[str] = None,
     sort_by: str = "newest",
-    limit: int = 150
+    limit: int = 150,
+    platform_filter: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     conn = get_db()
     query = """
@@ -505,6 +598,10 @@ def get_results(
     elif shipping_filter == "pickup_only":
         query += " AND r.shipping_possible = 0"
 
+    if platform_filter and platform_filter != "all":
+        query += " AND r.platform = ?"
+        params.append(platform_filter)
+
     if min_price is not None:
         query += " AND r.price_num >= ?"
         params.append(min_price)
@@ -514,9 +611,9 @@ def get_results(
         params.append(max_price)
 
     if search_term:
-        query += " AND (r.title LIKE ? OR r.description LIKE ? OR r.ocr_text LIKE ?)"
+        query += " AND (r.title LIKE ? OR r.description LIKE ? OR r.ocr_text LIKE ? OR r.notes LIKE ?)"
         like_term = f"%{search_term}%"
-        params.extend([like_term, like_term, like_term])
+        params.extend([like_term, like_term, like_term, like_term])
 
     # Sortier-Optionen
     if sort_by == "price_asc":
@@ -571,8 +668,103 @@ def get_results(
             d["online_duration"] = format_relative_time(d.get("found_at"))
 
         d["found_at_formatted"] = format_datetime_str(d.get("found_at"))
+
+        try:
+            d["deal_score"] = json.loads(d.get("deal_score_json") or "{}")
+        except Exception:
+            d["deal_score"] = {}
+
+        try:
+            d["safety_score"] = json.loads(d.get("safety_score_json") or "{}")
+        except Exception:
+            d["safety_score"] = {}
+
+        try:
+            d["negotiation"] = json.loads(d.get("negotiation_json") or "{}")
+        except Exception:
+            d["negotiation"] = {}
+
+        d["notes"] = d.get("notes") or ""
+        d["platform"] = d.get("platform") or "kleinanzeigen"
+
         results.append(d)
     return results
+
+def recheck_existing_results_for_search(search_id: int) -> Dict[str, int]:
+    """
+    Überprüft alle bereits für eine Suche gespeicherten Inserate gegen die aktualisierten Kriterien.
+    - Anzeigen, die die Kriterien NICHT mehr erfüllen, werden gelöscht.
+    - Anzeigen, die WEITERHIN passen, bleiben vollständig erhalten (inkl. status: 'read', 'starred', Notizen).
+    """
+    search = get_search(search_id)
+    if not search:
+        return {"kept": 0, "removed": 0}
+
+    from app.scraper import matches_keywords
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM results WHERE search_id = ?", (search_id,))
+    rows = cursor.fetchall()
+
+    min_p = search.get("min_price")
+    max_p = search.get("max_price")
+    shipping_req = search.get("shipping_type", "all")
+    search_platform = search.get("platform", "both")
+
+    kept = 0
+    removed = 0
+    for row in rows:
+        r = dict(row)
+        res_id = r["id"]
+
+        # 1. Preisgrenzen prüfen
+        p_num = r.get("price_num")
+        if p_num is not None:
+            if min_p is not None and p_num < min_p:
+                cursor.execute("DELETE FROM results WHERE id = ?", (res_id,))
+                removed += 1
+                continue
+            if max_p is not None and p_num > max_p:
+                cursor.execute("DELETE FROM results WHERE id = ?", (res_id,))
+                removed += 1
+                continue
+
+        # 2. Versandoption prüfen
+        if shipping_req == "shipping_only" and not r.get("shipping_possible"):
+            cursor.execute("DELETE FROM results WHERE id = ?", (res_id,))
+            removed += 1
+            continue
+        elif shipping_req == "pickup_only" and r.get("shipping_possible"):
+            cursor.execute("DELETE FROM results WHERE id = ?", (res_id,))
+            removed += 1
+            continue
+
+        # 3. Plattform prüfen
+        item_platform = r.get("platform", "kleinanzeigen")
+        if search_platform != "both" and search_platform != item_platform:
+            cursor.execute("DELETE FROM results WHERE id = ?", (res_id,))
+            removed += 1
+            continue
+
+        # 4. Suchbegriffe & Ausschlusskriterien prüfen
+        matched, reason = matches_keywords(
+            search_criteria=search,
+            title=r.get("title", ""),
+            description=r.get("description", ""),
+            ocr_text=r.get("ocr_text", "")
+        )
+        if not matched:
+            cursor.execute("DELETE FROM results WHERE id = ?", (res_id,))
+            removed += 1
+            continue
+
+        # Passt weiterhin! Status (read, starred), Notizen usw. bleiben unangetastet
+        cursor.execute("UPDATE results SET match_reason = ? WHERE id = ?", (reason, res_id))
+        kept += 1
+
+    conn.commit()
+    conn.close()
+    return {"kept": kept, "removed": removed}
 
 def clear_results(search_id: Optional[int] = None):
     """Löscht vorhandene Treffer (für einen bestimmten Suchauftrag oder komplett)."""

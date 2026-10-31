@@ -101,6 +101,12 @@
           <input type="text" id="filter-search-input" placeholder="Treffer durchsuchen (Titel, Text, Bild-Info)...">
         </div>
 
+        <select class="filter-select" id="filter-platform">
+          <option value="" data-i18n="filter_platform_all">Alle Plattformen</option>
+          <option value="kleinanzeigen">Kleinanzeigen</option>
+          <option value="facebook">Facebook Marketplace</option>
+        </select>
+
         <select class="filter-select" id="filter-shipping">
           <option value="all" data-i18n="filter_shipping_all">Alle Angebote</option>
           <option value="shipping_only" data-i18n="filter_shipping_only">Nur mit Versand</option>
@@ -272,6 +278,27 @@
           </div>
 
           <div class="form-row">
+            <div class="form-group" style="flex: 1;">
+              <label class="form-label" data-i18n="lbl_platform">Such-Plattform</label>
+              <select class="form-control" id="s-platform">
+                <option value="both" selected data-i18n="opt_platform_both">Beide (Kleinanzeigen &amp; Facebook)</option>
+                <option value="kleinanzeigen" data-i18n="opt_platform_kleinanzeigen">Nur Kleinanzeigen</option>
+                <option value="facebook" data-i18n="opt_platform_facebook">Nur Facebook Marketplace</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex: 1;">
+              <label class="form-label" data-i18n="lbl_interval">Prüfintervall</label>
+              <select class="form-control" id="s-interval">
+                <option value="5" data-i18n="opt_interval_5">Alle 5 Minuten</option>
+                <option value="10" data-i18n="opt_interval_10">Alle 10 Minuten</option>
+                <option value="15" selected data-i18n="opt_interval_15">Alle 15 Minuten</option>
+                <option value="30" data-i18n="opt_interval_30">Alle 30 Minuten</option>
+                <option value="60" data-i18n="opt_interval_60">Jede Stunde</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
             <div class="form-group">
               <label class="form-label" data-i18n="lbl_min_price">Mindestpreis (€)</label>
               <input type="number" class="form-control" id="s-min-price" placeholder="Beliebig">
@@ -297,7 +324,7 @@
             </div>
             <div class="form-group">
               <label class="form-label" data-i18n="lbl_radius">Umkreis in km</label>
-              <select class="form-control" id="s-radius">
+              <select class="form-control" id="s-radius" disabled title="Bitte zuerst eine Postleitzahl eingeben">
                 <option value="0" data-i18n="opt_radius_none">Keine Beschränkung</option>
                 <option value="5">5 km</option>
                 <option value="10">10 km</option>
@@ -306,16 +333,7 @@
                 <option value="50">50 km</option>
                 <option value="100">100 km</option>
               </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label" data-i18n="lbl_interval">Prüfintervall</label>
-              <select class="form-control" id="s-interval">
-                <option value="5" data-i18n="opt_interval_5">Alle 5 Minuten</option>
-                <option value="10" data-i18n="opt_interval_10">Alle 10 Minuten</option>
-                <option value="15" selected data-i18n="opt_interval_15">Alle 15 Minuten</option>
-                <option value="30" data-i18n="opt_interval_30">Alle 30 Minuten</option>
-                <option value="60" data-i18n="opt_interval_60">Jede Stunde</option>
-              </select>
+              <div class="form-hint" id="radius-hint" style="font-size: 11.5px; color: var(--text-secondary); margin-top: 4px;" data-i18n="hint_radius_plz">Nur mit eingegebener PLZ aktiv.</div>
             </div>
           </div>
 
@@ -356,19 +374,62 @@
       <div class="modal-body">
         
         <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
-          <div style="display: flex; align-items: baseline; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
             <div style="font-size: 24px; font-weight: bold; color: var(--primary-hover);" id="detail-price"></div>
             <div id="detail-price-reduction" style="display: none; background: rgba(34, 197, 94, 0.12); color: #15803d; padding: 4px 8px; border-radius: var(--radius-sm); font-size: 12.5px; font-weight: 600;"></div>
+            <span id="detail-platform-badge" class="badge-platform"></span>
           </div>
-          <a id="detail-link" href="#" target="_blank" class="btn btn-primary btn-sm" style="text-decoration: none;">
-            <span data-i18n="btn_open_kleinanzeigen">Auf Kleinanzeigen öffnen</span>
-            <span class="icon-wrap" id="icon-detail-ext"></span>
-          </a>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-open-negotiation" style="gap: 6px;">
+              <span class="icon-wrap" id="icon-detail-neg"></span>
+              <span data-i18n="btn_negotiate">Verhandeln mit KI</span>
+            </button>
+            <a id="detail-link" href="#" target="_blank" class="btn btn-primary btn-sm" style="text-decoration: none;">
+              <span id="detail-link-text" data-i18n="btn_open_kleinanzeigen">Auf Kleinanzeigen öffnen</span>
+              <span class="icon-wrap" id="icon-detail-ext"></span>
+            </a>
+          </div>
         </div>
 
         <div style="display: flex; gap: 16px; font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; flex-wrap: wrap;">
           <span id="detail-location"></span>
           <span id="detail-online-duration"></span>
+        </div>
+
+        <!-- KI-Deal-Score & Betrugs-Frühwarnung Cards -->
+        <div class="ai-assessment-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+          <div class="ai-card" id="detail-deal-card">
+            <div class="ai-card-header">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="icon-wrap" id="icon-deal-badge"></span>
+                <span style="font-weight: 600; font-size: 13px;" data-i18n="lbl_deal_score">KI-Deal-Score</span>
+              </div>
+              <span id="detail-deal-badge" class="score-badge">...</span>
+            </div>
+            <div id="detail-deal-text" class="ai-card-body" style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.4;">Wird berechnet...</div>
+          </div>
+          <div class="ai-card" id="detail-safety-card">
+            <div class="ai-card-header">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="icon-wrap" id="icon-safety-badge"></span>
+                <span style="font-weight: 600; font-size: 13px;" data-i18n="lbl_safety_score">Betrugs- &amp; Scam-Radar</span>
+              </div>
+              <span id="detail-safety-badge" class="score-badge">...</span>
+            </div>
+            <div id="detail-safety-text" class="ai-card-body" style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.4;">Wird geprüft...</div>
+          </div>
+        </div>
+
+        <!-- Persönliche Notiz -->
+        <div class="notes-container" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px; margin-bottom: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <div style="display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px;">
+              <span class="icon-wrap" id="icon-notes-title"></span>
+              <span data-i18n="lbl_personal_notes">Persönliche Notiz zu dieser Anzeige:</span>
+            </div>
+            <span id="detail-note-status" style="font-size: 11.5px; color: var(--text-secondary);"></span>
+          </div>
+          <textarea class="form-control" id="detail-notes-input" rows="2" placeholder="z. B. Verkäufer kontaktiert, Preis verhandelt, Abholung am Wochenende..." style="resize: vertical; font-size: 13px;"></textarea>
         </div>
 
         <!-- Preisverlauf falls vorhanden -->
@@ -530,6 +591,68 @@
 
           <hr style="border: 0; border-top: 1px solid var(--border); margin: 16px 0;">
 
+          <!-- Facebook Marketplace Bereich -->
+          <div style="margin-bottom: 20px;">
+            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #1877f2; display: flex; align-items: center; gap: 6px;">
+              <span class="icon-wrap" id="icon-cfg-facebook"></span>
+              <span data-i18n="sec_facebook">Facebook Marketplace</span>
+            </h3>
+            <div class="form-group">
+              <label class="form-label" data-i18n="lbl_fb_cookie">Session-Cookie (optional)</label>
+              <input type="password" class="form-control" id="cfg-fb-cookie" placeholder="z. B. c_user=1000...; xs=...">
+              <div class="form-hint" data-i18n="hint_fb_cookie">Ermöglicht personalisierten Zugriff auf regionale Facebook Marketplace Inserate. Bleibt ohne Eingabe öffentlich.</div>
+            </div>
+          </div>
+
+          <hr style="border: 0; border-top: 1px solid var(--border); margin: 16px 0;">
+
+          <!-- KI-Verhandlungsassistent & Analyse Konfiguration -->
+          <div style="margin-bottom: 20px;">
+            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #7c3aed; display: flex; align-items: center; gap: 6px;">
+              <span class="icon-wrap" id="icon-cfg-ai"></span>
+              <span data-i18n="sec_ai">KI-Verhandlung &amp; Deals (Gemini, DeepSeek, Claude, Ollama)</span>
+            </h3>
+            <div class="form-row">
+              <div class="form-group" style="flex: 1;">
+                <label class="form-label" data-i18n="lbl_ai_provider">KI-Modell / Anbieter</label>
+                <select class="form-control" id="cfg-ai-provider" onchange="toggleAiFields(this.value)">
+                  <option value="heuristic" data-i18n="opt_ai_heuristic">Integrierter Assistent (Sofort einsatzbereit, kostenlos)</option>
+                  <option value="gemini">Google Gemini</option>
+                  <option value="deepseek">DeepSeek AI</option>
+                  <option value="claude">Anthropic Claude</option>
+                  <option value="openai">OpenAI (ChatGPT)</option>
+                  <option value="kimi">Kimi / Moonshot AI</option>
+                  <option value="ollama">Ollama (Lokal / Offline)</option>
+                </select>
+              </div>
+              <div class="form-group" style="flex: 1;">
+                <label class="form-label" data-i18n="lbl_ai_model">Modellname (optional)</label>
+                <input type="text" class="form-control" id="cfg-ai-model" placeholder="z. B. gemini-1.5-flash oder deepseek-chat">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group" style="flex: 2;">
+                <label class="form-label" data-i18n="lbl_ai_api_key">API-Schlüssel</label>
+                <input type="password" class="form-control" id="cfg-ai-api-key" placeholder="API-Key deines KI-Anbieters">
+              </div>
+              <div class="form-group" style="flex: 1;">
+                <label class="form-label" data-i18n="lbl_ai_default_style">Standard-Stil</label>
+                <select class="form-control" id="cfg-ai-style">
+                  <option value="freundlich" data-i18n="opt_style_friendly">Freundlich &amp; sympathisch</option>
+                  <option value="sachlich" data-i18n="opt_style_factual">Sachlich &amp; direkt</option>
+                  <option value="hartnaeckig" data-i18n="opt_style_persistent">Hartnäckig &amp; bestimmt</option>
+                  <option value="schnaeppchenjaeger" data-i18n="opt_style_bargain">Schnäppchenjäger (Sofortzahler)</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group" id="cfg-ollama-row" style="display: none;">
+              <label class="form-label">Ollama Server URL</label>
+              <input type="text" class="form-control" id="cfg-ai-ollama-url" value="http://localhost:11434">
+            </div>
+          </div>
+
+          <hr style="border: 0; border-top: 1px solid var(--border); margin: 16px 0;">
+
           <!-- GitHub Updater Bereich -->
           <div>
             <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #4b5563; display: flex; align-items: center; gap: 6px;">
@@ -582,8 +705,93 @@
     </div>
   </div>
 
+  <!-- MODAL: KI-Verhandlungsassistent -->
+  <div class="modal-overlay" id="modal-negotiation">
+    <div class="modal-box modal-box-large">
+      <div class="modal-header">
+        <div style="flex: 1; overflow: hidden; padding-right: 12px;">
+          <h2 data-i18n="modal_negotiation_title">KI-Verhandlungsassistent</h2>
+          <span style="font-size: 12.5px; color: var(--text-secondary);" id="neg-ad-title"></span>
+        </div>
+        <button class="btn-icon-tiny" data-close-modal="modal-negotiation" id="btn-close-neg-modal"></button>
+      </div>
+      <div class="modal-body">
+        
+        <div class="form-row" style="background: var(--bg-subtle); padding: 12px; border-radius: var(--radius-md); margin-bottom: 14px;">
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" data-i18n="lbl_target_price">Dein Ziel- / Wunschpreis (€)</label>
+            <input type="number" class="form-control" id="neg-target-price" placeholder="z. B. 120">
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" data-i18n="lbl_neg_style">Verhandlungsstil</label>
+            <select class="form-control" id="neg-style">
+              <option value="freundlich" data-i18n="opt_style_friendly">Freundlich &amp; sympathisch</option>
+              <option value="sachlich" data-i18n="opt_style_factual">Sachlich &amp; direkt</option>
+              <option value="hartnaeckig" data-i18n="opt_style_persistent">Hartnäckig &amp; bestimmt</option>
+              <option value="schnaeppchenjaeger" data-i18n="opt_style_bargain">Schnäppchenjäger (Sofortzahler)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label class="form-label" data-i18n="lbl_stop_condition">Wann soll die KI aufhören zu verhandeln? (Abbruchkriterium)</label>
+          <input type="text" class="form-control" id="neg-stop-condition" placeholder="z. B. Wenn Verkäufer unter 140€ ablehnt oder Festpreis sagt">
+          <div class="form-hint" data-i18n="hint_stop_condition">Die KI beendet die Verhandlung höflich, sobald das Kriterium oder dein Zielpreis erreicht ist.</div>
+        </div>
+
+        <!-- Bisheriger Gesprächsverlauf -->
+        <div class="form-label" data-i18n="lbl_chat_history">Bisheriger Gesprächsverlauf:</div>
+        <div class="neg-chat-container" id="neg-chat-history">
+          <!-- Nachrichten-Bubbles -->
+        </div>
+
+        <!-- Antwort des Verkäufers einfügen -->
+        <div class="form-group" style="margin-top: 14px;">
+          <label class="form-label" data-i18n="lbl_seller_reply">Antwort des Verkäufers eingeben (optional):</label>
+          <textarea class="form-control" id="neg-seller-input" rows="2" placeholder="Nachricht des Verkäufers hier hineinkopieren..."></textarea>
+        </div>
+
+        <!-- Vorschlag der KI -->
+        <div id="neg-suggestion-box" style="margin-top: 14px; background: rgba(134, 184, 23, 0.08); border: 1px solid rgba(134, 184, 23, 0.3); border-radius: var(--radius-md); padding: 12px; display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-weight: 600; font-size: 13px; color: var(--primary);" id="neg-strategy-text">Empfohlene Nachricht:</span>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-copy-neg-reply" data-i18n="btn_copy_text">Text kopieren</button>
+          </div>
+          <div id="neg-reply-text" style="font-size: 13.5px; line-height: 1.5; white-space: pre-wrap;"></div>
+        </div>
+
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: space-between;">
+        <button type="button" class="btn btn-secondary" data-close-modal="modal-negotiation" data-i18n="btn_close">Schließen</button>
+        <button type="button" class="btn btn-primary" id="btn-generate-neg-step">
+          <span class="icon-wrap" id="icon-neg-send"></span>
+          <span data-i18n="btn_generate_step">Nächste Nachricht vorschlagen</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: In-App Bild-Galerie / Lightbox -->
+  <div id="lightbox-modal" class="lightbox-modal hidden">
+    <button class="lightbox-close" id="lightbox-btn-close" title="Schließen (Esc)">&times;</button>
+    <button class="lightbox-nav lightbox-prev" id="lightbox-btn-prev" title="Vorheriges Bild (&larr;)">&lsaquo;</button>
+    <div class="lightbox-stage">
+      <img id="lightbox-img" src="" alt="Großansicht">
+      <div id="lightbox-counter" class="lightbox-counter">1 / 1</div>
+    </div>
+    <button class="lightbox-nav lightbox-next" id="lightbox-btn-next" title="Nächstes Bild (&rarr;)">&rsaquo;</button>
+    <div id="lightbox-thumbs" class="lightbox-thumbs"></div>
+  </div>
+
   <!-- Toast Container -->
   <div class="toast-container" id="toast-container"></div>
+
+  <!-- Initiale Daten für sofortiges Rendern -->
+  <script>
+    window.__INITIAL_SEARCHES__ = {{ searches_json | default('[]') | safe }};
+    window.__INITIAL_RESULTS__ = {{ results_json | default('[]') | safe }};
+    window.__INITIAL_STATS__ = {{ stats_json | default('{}') | safe }};
+  </script>
 
   <!-- Skripte -->
   <script src="/static/icons.js"></script>

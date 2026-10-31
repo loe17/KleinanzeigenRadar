@@ -13,11 +13,13 @@ document.addEventListener("DOMContentLoaded", () => {
   initApp();
   setupEventListeners();
 
-  // Regelmäßige Aktualisierung der Statistiken und Treffer alle 30 Sekunden
-  setInterval(() => {
-    loadSearches(false);
-    loadResults(false);
-  }, 30000);
+  // Regelmäßige Aktualisierung der Statistiken und Treffer alle 30 Sekunden (ausgenommen Screenshot-Modus)
+  if (!window.location.search.includes("screenshot=1")) {
+    setInterval(() => {
+      loadSearches(false);
+      loadResults(false);
+    }, 30000);
+  }
 });
 
 // --- Statische SVG-Icons im DOM initialisieren ---
@@ -59,6 +61,27 @@ function initIcons() {
   document.getElementById("icon-perform-update").innerHTML = getSvgIcon("download", 14);
   const helpHeaderIcon = document.getElementById("icon-help-header");
   if (helpHeaderIcon) helpHeaderIcon.innerHTML = getSvgIcon("lightbulb", 14);
+
+  const negIcon = document.getElementById("icon-detail-neg");
+  if (negIcon) negIcon.innerHTML = getSvgIcon("robot", 14);
+  const dealIcon = document.getElementById("icon-deal-badge");
+  if (dealIcon) dealIcon.innerHTML = getSvgIcon("badgePercent", 14);
+  const safetyIcon = document.getElementById("icon-safety-badge");
+  if (safetyIcon) safetyIcon.innerHTML = getSvgIcon("shield", 14);
+  const notesIcon = document.getElementById("icon-notes-title");
+  if (notesIcon) notesIcon.innerHTML = getSvgIcon("fileText", 14);
+  const cfgFbIcon = document.getElementById("icon-cfg-facebook");
+  if (cfgFbIcon) cfgFbIcon.innerHTML = getSvgIcon("facebook", 16);
+  const cfgAiIcon = document.getElementById("icon-cfg-ai");
+  if (cfgAiIcon) cfgAiIcon.innerHTML = getSvgIcon("robot", 16);
+  const negSendIcon = document.getElementById("icon-neg-send");
+  if (negSendIcon) negSendIcon.innerHTML = getSvgIcon("robot", 14);
+  const lbPrev = document.getElementById("lightbox-btn-prev");
+  if (lbPrev) lbPrev.innerHTML = getSvgIcon("chevronLeft", 24);
+  const lbNext = document.getElementById("lightbox-btn-next");
+  if (lbNext) lbNext.innerHTML = getSvgIcon("chevronRight", 24);
+  const lbClose = document.getElementById("lightbox-btn-close");
+  if (lbClose) lbClose.innerHTML = getSvgIcon("x", 20);
 }
 
 // --- Sprachwechsel & Übersetzungsaktualisierung ---
@@ -126,17 +149,22 @@ function updateStaticTranslations() {
 }
 
 async function initApp() {
-  await loadSearches();
-  await loadResults();
-  loadStats();
-
-  if (allSearches.length > 0 && allResults.length === 0) {
-    setTimeout(async () => {
-      await loadSearches(false);
-      await loadResults(false);
-      loadStats();
-    }, 2500);
+  if (window.__INITIAL_SEARCHES__ && window.__INITIAL_SEARCHES__.length > 0) {
+    allSearches = window.__INITIAL_SEARCHES__;
+    renderSearchesList();
   }
+  if (window.__INITIAL_RESULTS__ && window.__INITIAL_RESULTS__.length > 0) {
+    allResults = window.__INITIAL_RESULTS__;
+    renderResultsGrid();
+  }
+  if (window.__INITIAL_STATS__ && typeof window.__INITIAL_STATS__ === "object") {
+    applyStatsData(window.__INITIAL_STATS__);
+  }
+
+  // Hintergrund-Abgleich
+  loadSearches(false);
+  loadResults(false);
+  loadStats();
 }
 
 function setupEventListeners() {
@@ -148,11 +176,69 @@ function setupEventListeners() {
 
   // Filter-Bar
   document.getElementById("filter-search-input").addEventListener("input", debounce(filterResultsLocally, 250));
+  const platSelect = document.getElementById("filter-platform");
+  if (platSelect) platSelect.addEventListener("change", () => loadResults());
   document.getElementById("filter-shipping").addEventListener("change", () => loadResults());
   const sortSelect = document.getElementById("filter-sort");
   if (sortSelect) sortSelect.addEventListener("change", () => loadResults());
   document.getElementById("filter-min-price").addEventListener("input", debounce(() => loadResults(), 400));
   document.getElementById("filter-max-price").addEventListener("input", debounce(() => loadResults(), 400));
+
+  // PLZ & Umkreis Kopplung
+  const plzInput = document.getElementById("s-plz");
+  if (plzInput) {
+    plzInput.addEventListener("input", () => updateRadiusState());
+  }
+
+  // Notizen Auto-Save
+  const notesInput = document.getElementById("detail-notes-input");
+  if (notesInput) {
+    notesInput.addEventListener("input", debounce(saveCurrentAdNotes, 600));
+    notesInput.addEventListener("blur", saveCurrentAdNotes);
+  }
+
+  // KI-Verhandlung
+  const btnOpenNeg = document.getElementById("btn-open-negotiation");
+  if (btnOpenNeg) {
+    btnOpenNeg.addEventListener("click", () => {
+      if (selectedResult) openNegotiationModal(selectedResult);
+    });
+  }
+  const btnGenStep = document.getElementById("btn-generate-neg-step");
+  if (btnGenStep) {
+    btnGenStep.addEventListener("click", stepNegotiation);
+  }
+  const btnCopyNeg = document.getElementById("btn-copy-neg-reply");
+  if (btnCopyNeg) {
+    btnCopyNeg.addEventListener("click", () => {
+      const textEl = document.getElementById("neg-reply-text");
+      if (textEl && textEl.innerText) {
+        navigator.clipboard.writeText(textEl.innerText);
+        showToast(t("toast_copied"), "success");
+      }
+    });
+  }
+
+  // Lightbox Steuerung
+  const lbModal = document.getElementById("lightbox-modal");
+  const lbCloseBtn = document.getElementById("lightbox-btn-close");
+  const lbPrevBtn = document.getElementById("lightbox-btn-prev");
+  const lbNextBtn = document.getElementById("lightbox-btn-next");
+  if (lbCloseBtn) lbCloseBtn.addEventListener("click", closeLightbox);
+  if (lbPrevBtn) lbPrevBtn.addEventListener("click", prevLightboxImage);
+  if (lbNextBtn) lbNextBtn.addEventListener("click", nextLightboxImage);
+  if (lbModal) {
+    lbModal.addEventListener("click", (e) => {
+      if (e.target === lbModal) closeLightbox();
+    });
+  }
+  document.addEventListener("keydown", (e) => {
+    if (lbModal && !lbModal.classList.contains("hidden")) {
+      if (e.key === "Escape") closeLightbox();
+      else if (e.key === "ArrowLeft") prevLightboxImage();
+      else if (e.key === "ArrowRight") nextLightboxImage();
+    }
+  });
 
   // Buttons
   document.getElementById("btn-add-search").addEventListener("click", () => openSearchModal());
@@ -350,6 +436,9 @@ async function loadResults(showSpinner = true) {
   const sortBy = sortEl ? sortEl.value : "newest";
 
   const params = new URLSearchParams();
+  const platformEl = document.getElementById("filter-platform");
+  const platform = platformEl ? platformEl.value : "";
+  if (platform) params.append("platform_filter", platform);
   if (activeSearchId) params.append("search_id", activeSearchId);
   if (activeStatus && activeStatus !== "all") params.append("status", activeStatus);
   if (shipping && shipping !== "all") params.append("shipping_filter", shipping);
@@ -369,14 +458,21 @@ async function loadResults(showSpinner = true) {
   }
 }
 
+function applyStatsData(stats) {
+  if (!stats) return;
+  const countAll = document.getElementById("count-all");
+  const countNew = document.getElementById("count-new");
+  const countStarred = document.getElementById("count-starred");
+  if (countAll) countAll.innerText = stats.total_results || 0;
+  if (countNew) countNew.innerText = stats.new_results || 0;
+  if (countStarred) countStarred.innerText = stats.starred_results || 0;
+}
+
 async function loadStats() {
   try {
     const res = await fetch("/api/stats");
     const stats = await res.json();
-    
-    document.getElementById("count-all").innerText = stats.total_results || 0;
-    document.getElementById("count-new").innerText = stats.new_results || 0;
-    document.getElementById("count-starred").innerText = stats.starred_results || 0;
+    applyStatsData(stats);
   } catch (err) {
     console.error("Fehler bei Statistiken:", err);
   }
@@ -451,6 +547,12 @@ function renderResultsGrid() {
       ? `<span style="text-decoration: line-through; opacity: 0.75; font-size: 11px; margin-right: 4px;">${escapeHtml(r.old_price)}</span>${escapeHtml(r.price)} <span style="font-size: 10px; background: rgba(34, 197, 94, 0.35); padding: 1px 4px; border-radius: 4px; font-weight: bold;">${escapeHtml(r.price_diff)}</span>`
       : escapeHtml(r.price || 'VB');
 
+    const platform = r.platform || "kleinanzeigen";
+    const isFb = platform === "facebook";
+    const platformBadge = isFb 
+      ? `<span class="badge-platform facebook">${getSvgIcon('facebook', 11)} FB Marketplace</span>`
+      : `<span class="badge-platform kleinanzeigen">${getSvgIcon('sparkles', 11)} Kleinanzeigen</span>`;
+
     html += `
       <div class="result-card ${isNew ? 'is-new' : ''}" onclick="openDetailModal(${r.id})">
         <div class="result-image-box">
@@ -461,7 +563,9 @@ function renderResultsGrid() {
 
         <div class="result-card-body">
           <div class="result-tags">
+            ${platformBadge}
             <span class="tag tag-highlight">${escapeHtml(r.search_name || 'Suche')}</span>
+            ${r.notes ? `<span class="tag" style="background: rgba(124, 58, 237, 0.12); color: #7c3aed; border-color: rgba(124, 58, 237, 0.3);" title="${escapeHtml(r.notes)}">${getSvgIcon('fileText', 12)} Notiz</span>` : ''}
             ${r.online_duration ? `<span class="tag" title="${t('lbl_online_since')}">${getSvgIcon('clock', 12)} ${escapeHtml(r.online_duration)}</span>` : ''}
             ${r.price_reduced ? `<span class="tag" style="background: rgba(34, 197, 94, 0.15); color: #16a34a; border-color: rgba(34, 197, 94, 0.3); font-weight: 600;" title="${t('badge_reduced')}">${getSvgIcon('trendingDown', 12)} ${escapeHtml(r.price_diff)}</span>` : ''}
             ${r.ocr_text ? `<span class="tag" title="Text in Fotos gefunden">${getSvgIcon('camera', 12)} ${t('card_image_text')}</span>` : ''}
@@ -553,6 +657,32 @@ function openDetailModal(resultId) {
   document.getElementById("detail-link").href = r.url;
   document.getElementById("detail-description").innerText = r.description || t("no_description");
 
+  // Plattform-Badge & Link-Text
+  const isFb = (r.platform || "kleinanzeigen") === "facebook";
+  const platBadge = document.getElementById("detail-platform-badge");
+  if (platBadge) {
+    platBadge.className = `badge-platform ${isFb ? 'facebook' : 'kleinanzeigen'}`;
+    platBadge.innerHTML = isFb
+      ? `${getSvgIcon('facebook', 12)} Facebook Marketplace`
+      : `${getSvgIcon('sparkles', 12)} Kleinanzeigen`;
+  }
+  const linkTextEl = document.getElementById("detail-link-text");
+  if (linkTextEl) {
+    linkTextEl.innerText = isFb ? t("btn_open_facebook") : t("btn_open_kleinanzeigen");
+  }
+
+  // Persönliche Notiz initialisieren
+  const noteInput = document.getElementById("detail-notes-input");
+  if (noteInput) {
+    noteInput.value = r.notes || "";
+    const noteStat = document.getElementById("detail-note-status");
+    if (noteStat) noteStat.innerText = "";
+  }
+
+  // KI-Deal-Score & Betrugs-Radar rendern
+  renderDealScoreCard(r.deal_score);
+  renderSafetyScoreCard(r.safety_score);
+
   // Online-Dauer
   const durEl = document.getElementById("detail-online-duration");
   if (durEl) {
@@ -602,15 +732,17 @@ function openDetailModal(resultId) {
     }
   }
 
-  // Galerie
+  // Galerie mit In-App Lightbox
   const gallery = document.getElementById("detail-gallery");
   gallery.innerHTML = "";
   if (r.images && r.images.length > 0) {
-    r.images.forEach(imgUrl => {
+    r.images.forEach((imgUrl, imgIdx) => {
       const img = document.createElement("img");
       img.src = imgUrl;
       img.loading = "lazy";
-      img.onclick = () => window.open(imgUrl, "_blank");
+      img.style.cursor = "pointer";
+      img.title = "Klicken für Großansicht";
+      img.onclick = () => openLightbox(r.images, imgIdx);
       gallery.appendChild(img);
     });
   } else {
@@ -626,31 +758,43 @@ function openDetailModal(resultId) {
     ocrContainer.style.display = "none";
   }
 
-  // Falls Beschreibung kurz oder leer ist, Details asynchron nachladen
-  if (!r.description || r.description.length < 50 || !r.images || r.images.length <= 1) {
-    fetch(`/api/results/${r.id}/details`)
-      .then(res => res.json())
-      .then(updated => {
-        if (updated && selectedResult && selectedResult.id === r.id) {
-          if (updated.description) {
-            document.getElementById("detail-description").innerText = updated.description;
-            r.description = updated.description;
-          }
-          if (updated.images && updated.images.length > 0) {
-            r.images = updated.images;
-            gallery.innerHTML = "";
-            updated.images.forEach(imgUrl => {
-              const img = document.createElement("img");
-              img.src = imgUrl;
-              img.loading = "lazy";
-              img.onclick = () => window.open(imgUrl, "_blank");
-              gallery.appendChild(img);
-            });
-          }
+  // Details asynchron nachladen (inkl. automatischer Deal- und Betrugs-Analyse)
+  fetch(`/api/results/${r.id}/details`)
+    .then(res => res.json())
+    .then(updated => {
+      if (updated && selectedResult && selectedResult.id === r.id) {
+        if (updated.description) {
+          document.getElementById("detail-description").innerText = updated.description;
+          r.description = updated.description;
         }
-      })
-      .catch(() => {});
-  }
+        if (updated.deal_score) {
+          r.deal_score = updated.deal_score;
+          renderDealScoreCard(updated.deal_score);
+        }
+        if (updated.safety_score) {
+          r.safety_score = updated.safety_score;
+          renderSafetyScoreCard(updated.safety_score);
+        }
+        if (updated.notes !== undefined) {
+          r.notes = updated.notes;
+          if (noteInput && !noteInput.value) noteInput.value = updated.notes || "";
+        }
+        if (updated.images && updated.images.length > 0) {
+          r.images = updated.images;
+          gallery.innerHTML = "";
+          updated.images.forEach((imgUrl, imgIdx) => {
+            const img = document.createElement("img");
+            img.src = imgUrl;
+            img.loading = "lazy";
+            img.style.cursor = "pointer";
+            img.title = "Klicken für Großansicht";
+            img.onclick = () => openLightbox(updated.images, imgIdx);
+            gallery.appendChild(img);
+          });
+        }
+      }
+    })
+    .catch(() => {});
 
   openModal("modal-detail");
 }
@@ -853,6 +997,8 @@ function openSearchModal(searchData = null) {
     document.getElementById("s-notify-email").checked = Boolean(searchData.notify_email);
     document.getElementById("s-interval").value = searchData.interval_minutes || 15;
     document.getElementById("s-is-active").checked = Boolean(searchData.is_active);
+    const platEl = document.getElementById("s-platform");
+    if (platEl) platEl.value = searchData.platform || "both";
   } else {
     document.getElementById("search-modal-title").innerText = t("modal_search_new_title");
     document.getElementById("search-id-input").value = "";
@@ -865,8 +1011,11 @@ function openSearchModal(searchData = null) {
     document.getElementById("s-notify-telegram").checked = true;
     document.getElementById("s-notify-email").checked = true;
     document.getElementById("s-is-active").checked = true;
+    const platEl = document.getElementById("s-platform");
+    if (platEl) platEl.value = "both";
   }
 
+  updateRadiusState();
   renderTermsList();
   const termInput = document.getElementById("term-input");
   if (termInput) termInput.value = "";
@@ -1042,7 +1191,8 @@ async function handleSearchFormSubmit(e) {
     notify_telegram: document.getElementById("s-notify-telegram").checked,
     notify_email: document.getElementById("s-notify-email").checked,
     interval_minutes: parseInt(document.getElementById("s-interval").value) || 15,
-    is_active: document.getElementById("s-is-active").checked
+    is_active: document.getElementById("s-is-active").checked,
+    platform: document.getElementById("s-platform") ? document.getElementById("s-platform").value : "both"
   };
 
   try {
@@ -1158,6 +1308,24 @@ async function openSettingsModal() {
     document.getElementById("cfg-email-to").value = settings.email_to || "";
     document.getElementById("cfg-github-repo").value = settings.github_repo || "loe17/KleinanzeigenRadar";
 
+    // Facebook & KI-Einstellungen
+    const fbCookieEl = document.getElementById("cfg-fb-cookie");
+    if (fbCookieEl) fbCookieEl.value = settings.facebook_session_cookie || "";
+
+    const aiProvEl = document.getElementById("cfg-ai-provider");
+    if (aiProvEl) {
+      aiProvEl.value = settings.ai_provider || "heuristic";
+      toggleAiFields(aiProvEl.value);
+    }
+    const aiKeyEl = document.getElementById("cfg-ai-api-key");
+    if (aiKeyEl) aiKeyEl.value = settings.ai_api_key || "";
+    const aiModelEl = document.getElementById("cfg-ai-model");
+    if (aiModelEl) aiModelEl.value = settings.ai_model || "";
+    const aiStyleEl = document.getElementById("cfg-ai-style");
+    if (aiStyleEl) aiStyleEl.value = settings.ai_negotiation_style || "freundlich";
+    const aiOllamaEl = document.getElementById("cfg-ai-ollama-url");
+    if (aiOllamaEl) aiOllamaEl.value = settings.ai_ollama_url || "http://localhost:11434";
+
     // Verschlüsselungsauswahl setzen
     const encEl = document.getElementById("cfg-email-encryption");
     if (encEl) {
@@ -1228,7 +1396,13 @@ async function handleSettingsFormSubmit(e) {
     email_smtp_tls: encVal,
     email_from: document.getElementById("cfg-email-from").value.trim(),
     email_to: document.getElementById("cfg-email-to").value.trim(),
-    github_repo: document.getElementById("cfg-github-repo").value.trim()
+    github_repo: document.getElementById("cfg-github-repo").value.trim(),
+    facebook_session_cookie: document.getElementById("cfg-fb-cookie") ? document.getElementById("cfg-fb-cookie").value.trim() : "",
+    ai_provider: document.getElementById("cfg-ai-provider") ? document.getElementById("cfg-ai-provider").value : "heuristic",
+    ai_api_key: document.getElementById("cfg-ai-api-key") ? document.getElementById("cfg-ai-api-key").value.trim() : "",
+    ai_model: document.getElementById("cfg-ai-model") ? document.getElementById("cfg-ai-model").value.trim() : "",
+    ai_negotiation_style: document.getElementById("cfg-ai-style") ? document.getElementById("cfg-ai-style").value : "freundlich",
+    ai_ollama_url: document.getElementById("cfg-ai-ollama-url") ? document.getElementById("cfg-ai-ollama-url").value.trim() : "http://localhost:11434"
   };
 
   const pass = document.getElementById("cfg-email-password").value;
@@ -1466,4 +1640,279 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+// --- PLZ & Umkreis Logik ---
+
+function updateRadiusState() {
+  const plzEl = document.getElementById("s-plz");
+  const radiusEl = document.getElementById("s-radius");
+  const hintEl = document.getElementById("radius-hint");
+  const hasPlz = plzEl && plzEl.value.trim().length > 0;
+  if (radiusEl) {
+    radiusEl.disabled = !hasPlz;
+    if (!hasPlz) radiusEl.value = "0";
+  }
+  if (hintEl) {
+    hintEl.style.display = hasPlz ? "none" : "block";
+  }
+}
+
+function toggleAiFields(provider) {
+  const row = document.getElementById("cfg-ollama-row");
+  if (row) {
+    row.style.display = provider === "ollama" ? "block" : "none";
+  }
+}
+
+// --- Persönliche Notizen Auto-Save ---
+
+async function saveCurrentAdNotes() {
+  if (!selectedResult) return;
+  const noteInput = document.getElementById("detail-notes-input");
+  const statusEl = document.getElementById("detail-note-status");
+  if (!noteInput) return;
+
+  const notes = noteInput.value.trim();
+  if (selectedResult.notes === notes) return;
+
+  if (statusEl) statusEl.innerText = "Speichere...";
+  try {
+    const res = await fetch(`/api/results/${selectedResult.id}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes })
+    });
+    if (res.ok) {
+      selectedResult.notes = notes;
+      const cached = allResults.find(x => x.id === selectedResult.id);
+      if (cached) cached.notes = notes;
+      if (statusEl) statusEl.innerText = t("toast_notes_saved");
+      renderResultsGrid();
+      setTimeout(() => { if (statusEl) statusEl.innerText = ""; }, 2500);
+    }
+  } catch (e) {
+    if (statusEl) statusEl.innerText = "Fehler beim Speichern";
+  }
+}
+
+// --- KI-Deal-Score & Betrugs-Radar Anzeige ---
+
+function renderDealScoreCard(dealScore) {
+  const badgeEl = document.getElementById("detail-deal-badge");
+  const textEl = document.getElementById("detail-deal-text");
+  if (!dealScore || dealScore.score === undefined) {
+    if (badgeEl) { badgeEl.innerText = "-"; badgeEl.className = "score-badge mid"; }
+    if (textEl) textEl.innerText = "Wird bei Bedarf analysiert";
+    return;
+  }
+  const score = dealScore.score;
+  let cls = "high";
+  if (score < 50) cls = "low";
+  else if (score < 75) cls = "mid";
+
+  if (badgeEl) {
+    badgeEl.className = `score-badge ${cls}`;
+    badgeEl.innerText = `${score}/100 (${dealScore.label || ''})`;
+  }
+  if (textEl) {
+    let proCon = "";
+    if (dealScore.pros && dealScore.pros.length > 0) {
+      proCon += `<div style="color: #15803d; margin-top: 4px;">• ${dealScore.pros.join("<br>• ")}</div>`;
+    }
+    if (dealScore.cons && dealScore.cons.length > 0) {
+      proCon += `<div style="color: #b91c1c; margin-top: 4px;">• ${dealScore.cons.join("<br>• ")}</div>`;
+    }
+    textEl.innerHTML = `<div>${escapeHtml(dealScore.verdict || '')}</div>${proCon}`;
+  }
+}
+
+function renderSafetyScoreCard(safetyScore) {
+  const badgeEl = document.getElementById("detail-safety-badge");
+  const textEl = document.getElementById("detail-safety-text");
+  if (!safetyScore) {
+    if (badgeEl) { badgeEl.innerText = "-"; badgeEl.className = "score-badge risk-low"; }
+    if (textEl) textEl.innerText = "Keine Auffälligkeiten";
+    return;
+  }
+  const level = safetyScore.risk_level || "niedrig";
+  let cls = "risk-low";
+  let lvlText = "Niedrig";
+  if (level === "hoch") {
+    cls = "risk-high";
+    lvlText = "Hohes Risiko!";
+  } else if (level === "mittel") {
+    cls = "risk-mid";
+    lvlText = "Mittleres Risiko";
+  }
+
+  if (badgeEl) {
+    badgeEl.className = `score-badge ${cls}`;
+    badgeEl.innerText = `${lvlText} (${safetyScore.risk_score || 0}%)`;
+  }
+  if (textEl) {
+    let flagsHtml = "";
+    if (safetyScore.flags && safetyScore.flags.length > 0) {
+      flagsHtml = `<div style="color: #b91c1c; font-weight: 500; margin-top: 4px;">Warnsignale:<br>• ${safetyScore.flags.join("<br>• ")}</div>`;
+    }
+    textEl.innerHTML = `<div>${escapeHtml(safetyScore.verdict || '')}</div>${flagsHtml}`;
+  }
+}
+
+// --- In-App Bild-Galerie / Lightbox ---
+
+let currentLightboxImages = [];
+let currentLightboxIndex = 0;
+
+function openLightbox(images, startIndex = 0) {
+  if (!images || images.length === 0) return;
+  currentLightboxImages = images;
+  currentLightboxIndex = Math.max(0, Math.min(startIndex, images.length - 1));
+  const modal = document.getElementById("lightbox-modal");
+  if (modal) {
+    modal.classList.remove("hidden");
+    updateLightboxView();
+  }
+}
+
+function closeLightbox() {
+  const modal = document.getElementById("lightbox-modal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function updateLightboxView() {
+  const imgEl = document.getElementById("lightbox-img");
+  const countEl = document.getElementById("lightbox-counter");
+  const thumbsContainer = document.getElementById("lightbox-thumbs");
+
+  if (imgEl && currentLightboxImages.length > 0) {
+    imgEl.src = currentLightboxImages[currentLightboxIndex];
+  }
+  if (countEl) {
+    countEl.innerText = `${currentLightboxIndex + 1} / ${currentLightboxImages.length}`;
+  }
+  if (thumbsContainer) {
+    thumbsContainer.innerHTML = "";
+    currentLightboxImages.forEach((src, idx) => {
+      const th = document.createElement("img");
+      th.src = src;
+      th.className = `lightbox-thumb ${idx === currentLightboxIndex ? 'active' : ''}`;
+      th.onclick = (e) => {
+        e.stopPropagation();
+        currentLightboxIndex = idx;
+        updateLightboxView();
+      };
+      thumbsContainer.appendChild(th);
+    });
+  }
+}
+
+function prevLightboxImage() {
+  if (currentLightboxImages.length === 0) return;
+  currentLightboxIndex = (currentLightboxIndex - 1 + currentLightboxImages.length) % currentLightboxImages.length;
+  updateLightboxView();
+}
+
+function nextLightboxImage() {
+  if (currentLightboxImages.length === 0) return;
+  currentLightboxIndex = (currentLightboxIndex + 1) % currentLightboxImages.length;
+  updateLightboxView();
+}
+
+// --- KI-Verhandlungsassistent ---
+
+async function openNegotiationModal(ad) {
+  if (!ad) return;
+  document.getElementById("neg-ad-title").innerText = `${ad.title} (${ad.price || 'VB'})`;
+  const targetPriceInput = document.getElementById("neg-target-price");
+  const styleSelect = document.getElementById("neg-style");
+  const stopCondInput = document.getElementById("neg-stop-condition");
+  const sellerInput = document.getElementById("neg-seller-input");
+  const suggBox = document.getElementById("neg-suggestion-box");
+
+  if (sellerInput) sellerInput.value = "";
+  if (suggBox) suggBox.style.display = "none";
+
+  try {
+    const res = await fetch(`/api/results/${ad.id}/negotiation`);
+    const neg = await res.json();
+    if (targetPriceInput) targetPriceInput.value = neg.target_price || "";
+    if (styleSelect && neg.style) styleSelect.value = neg.style;
+    if (stopCondInput) stopCondInput.value = neg.stop_condition || "";
+    renderNegotiationChat(neg.history || []);
+    if (neg.last_suggestion) {
+      document.getElementById("neg-reply-text").innerText = neg.last_suggestion;
+      document.getElementById("neg-suggestion-box").style.display = "block";
+    }
+  } catch (e) {
+    renderNegotiationChat([]);
+  }
+
+  openModal("modal-negotiation");
+}
+
+function renderNegotiationChat(history) {
+  const container = document.getElementById("neg-chat-history");
+  if (!container) return;
+  if (!history || history.length === 0) {
+    container.innerHTML = `<div style="font-size: 12.5px; color: var(--text-secondary); text-align: center; padding: 16px;">Noch kein Gesprächsverlauf. Klicke auf 'Nächste Nachricht vorschlagen' für den Einstieg.</div>`;
+    return;
+  }
+  container.innerHTML = history.map(msg => {
+    let cls = "neg-msg-assistant";
+    let senderName = "KI-Vorschlag";
+    if (msg.sender === "seller") {
+      cls = "neg-msg-seller";
+      senderName = "Verkäufer";
+    } else if (msg.sender === "user") {
+      cls = "neg-msg-user";
+      senderName = "Du";
+    }
+    return `
+      <div class="neg-msg-bubble ${cls}">
+        <div style="font-size: 11px; opacity: 0.75; margin-bottom: 2px;">${senderName} ${msg.timestamp ? `(${msg.timestamp})` : ''}</div>
+        <div>${escapeHtml(msg.text)}</div>
+        ${msg.strategy ? `<div style="font-size: 11px; margin-top: 4px; font-style: italic; opacity: 0.85;">Strategie: ${escapeHtml(msg.strategy)}</div>` : ''}
+      </div>
+    `;
+  }).join("");
+  container.scrollTop = container.scrollHeight;
+}
+
+async function stepNegotiation() {
+  if (!selectedResult) return;
+  const targetPrice = parseFloat(document.getElementById("neg-target-price").value) || null;
+  const style = document.getElementById("neg-style").value;
+  const stopCond = document.getElementById("neg-stop-condition").value.trim();
+  const sellerMsg = document.getElementById("neg-seller-input").value.trim();
+
+  const btn = document.getElementById("btn-generate-neg-step");
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/results/${selectedResult.id}/negotiation/step`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        target_price: targetPrice,
+        style: style,
+        stop_condition: stopCond,
+        seller_message: sellerMsg
+      })
+    });
+    const updated = await res.json();
+    renderNegotiationChat(updated.history || []);
+    if (updated.last_suggestion) {
+      document.getElementById("neg-reply-text").innerText = updated.last_suggestion;
+      document.getElementById("neg-suggestion-box").style.display = "block";
+      document.getElementById("neg-seller-input").value = "";
+    }
+    if (updated.should_stop) {
+      showToast(updated.stop_reason || "Verhandlung beendet", "info");
+    }
+  } catch (err) {
+    showToast("Fehler bei Verhandlung", "error");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }

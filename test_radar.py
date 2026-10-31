@@ -130,10 +130,11 @@ class TestKleinanzeigenRadar(unittest.TestCase):
         self.assertTrue("last_run_formatted" in s)
         self.assertIn("Uhr", s["created_at_formatted"])
 
+        pfx = f"test_{int(time.time()*1000)}"
         # Result creation
         res_id = save_result({
             "search_id": s_id,
-            "kleinanzeigen_id": "test_ad_9999",
+            "kleinanzeigen_id": f"{pfx}_9999",
             "title": "Lenovo Thinkpad T480 i5 16GB",
             "price": "180 €",
             "price_num": 180.0,
@@ -151,7 +152,7 @@ class TestKleinanzeigenRadar(unittest.TestCase):
         # Duplicate check
         dup_id = save_result({
             "search_id": s_id,
-            "kleinanzeigen_id": "test_ad_9999",
+            "kleinanzeigen_id": f"{pfx}_9999",
             "title": "Lenovo Thinkpad T480 i5 16GB",
             "url": "https://www.kleinanzeigen.de/s-anzeige/test/9999"
         })
@@ -160,7 +161,7 @@ class TestKleinanzeigenRadar(unittest.TestCase):
         # Second result for sort testing
         res_id2 = save_result({
             "search_id": s_id,
-            "kleinanzeigen_id": "test_ad_8888",
+            "kleinanzeigen_id": f"{pfx}_8888",
             "title": "Lenovo Thinkpad T480s 8GB",
             "price": "90 €",
             "price_num": 90.0,
@@ -189,7 +190,7 @@ class TestKleinanzeigenRadar(unittest.TestCase):
         # Recreate result for remaining checks
         res_id3 = save_result({
             "search_id": s_id,
-            "kleinanzeigen_id": "test_ad_7777",
+            "kleinanzeigen_id": f"{pfx}_7777",
             "title": "Lenovo Thinkpad T480 i7",
             "price": "220 €",
             "price_num": 220.0,
@@ -197,7 +198,7 @@ class TestKleinanzeigenRadar(unittest.TestCase):
         })
         # Status update
         update_result_status(res_id3, "starred")
-        results_starred = get_results(status="starred")
+        results_starred = get_results(search_id=s_id, status="starred")
         self.assertEqual(len(results_starred), 1)
 
         # Stats
@@ -556,10 +557,148 @@ class TestKleinanzeigenRadar(unittest.TestCase):
 
     def test_updater_module(self):
         from app.config import VERSION
-        self.assertEqual(VERSION, "0.2.1")
+        self.assertEqual(VERSION, "0.3.0")
         update_info = check_for_github_update()
         self.assertIn("current_version", update_info)
-        self.assertEqual(update_info["current_version"], "0.2.1")
+        self.assertEqual(update_info["current_version"], "0.3.0")
+
+    def test_multi_pipe_or_syntax(self):
+        search = {
+            "keywords": "Thinkpad, T480 | T490 | T14",
+            "case_sensitive": False,
+            "search_in_description": True
+        }
+        # Matches T480
+        m1, _ = matches_keywords(search, title="Lenovo Thinkpad T480", description="", ocr_text="")
+        self.assertTrue(m1)
+
+        # Matches T490
+        m2, _ = matches_keywords(search, title="Lenovo Thinkpad T490", description="", ocr_text="")
+        self.assertTrue(m2)
+
+        # Matches T14
+        m3, _ = matches_keywords(search, title="Lenovo Thinkpad T14 Gen 2", description="", ocr_text="")
+        self.assertTrue(m3)
+
+        # Does not match X280
+        m4, _ = matches_keywords(search, title="Lenovo Thinkpad X280", description="", ocr_text="")
+        self.assertFalse(m4)
+
+    def test_recheck_and_notes_persistence(self):
+        from app.database import (
+            create_search,
+            save_result,
+            get_results,
+            update_result_notes,
+            update_result_status,
+            recheck_existing_results_for_search
+        )
+        s_id = create_search({
+            "name": "Recheck Test",
+            "query": "Laptop",
+            "keywords": "i7, 16GB",
+            "min_price": 100,
+            "max_price": 500,
+            "search_in_description": True
+        })
+
+        uid1 = f"rec_1_{time.time()}"
+        uid2 = f"rec_2_{time.time()}"
+        r1_id = save_result({
+            "search_id": s_id,
+            "kleinanzeigen_id": uid1,
+            "title": "Laptop i7 16GB RAM",
+            "price": "300 €",
+            "price_num": 300.0,
+            "location": "Berlin",
+            "url": "https://kleinanzeigen.de/rec1",
+            "description": "Top Zustand",
+            "ocr_text": "",
+            "match_reason": "Treffer"
+        })
+        r2_id = save_result({
+            "search_id": s_id,
+            "kleinanzeigen_id": uid2,
+            "title": "Laptop i3 4GB RAM",
+            "price": "150 €",
+            "price_num": 150.0,
+            "location": "Hamburg",
+            "url": "https://kleinanzeigen.de/rec2",
+            "description": "Einfaches Notebook",
+            "ocr_text": "",
+            "match_reason": "Treffer"
+        })
+
+        # Set note and star on r1
+        update_result_notes(r1_id, "Wichtig: Akku fast neu")
+        update_result_status(r1_id, "starred")
+
+        # Update search criteria: must have "i7"
+        stats = recheck_existing_results_for_search(s_id)
+        self.assertEqual(stats["kept"], 1)
+        self.assertEqual(stats["removed"], 1)
+
+        remaining = get_results(search_id=s_id)
+        self.assertEqual(len(remaining), 1)
+        self.assertEqual(remaining[0]["id"], r1_id)
+        self.assertEqual(remaining[0]["notes"], "Wichtig: Akku fast neu")
+        self.assertEqual(remaining[0]["status"], "starred")
+
+    def test_ai_engine_heuristics(self):
+        from app.ai_engine import evaluate_deal_score, evaluate_safety_risk, generate_negotiation_reply
+
+        # Test deal score
+        deal = evaluate_deal_score(
+            title="Apple MacBook Air M1 8GB 256GB",
+            price=250.0,
+            description="MacBook Air M1 in gutem Zustand mit OVP und Ladekabel.",
+            max_budget=400.0
+        )
+        self.assertIn("score", deal)
+        self.assertGreaterEqual(deal["score"], 0)
+        self.assertLessEqual(deal["score"], 100)
+        self.assertIn("verdict", deal)
+
+        # Test safety score with scam phrase
+        safety_scam = evaluate_safety_risk(
+            title="iPhone 15 Pro neu versiegelt",
+            price=200.0,
+            description="Verkauf nur mit Zahlung per PayPal Freunde und Familie oder Gutscheinkarten."
+        )
+        self.assertIn("risk_level", safety_scam)
+        self.assertIn(safety_scam["risk_level"], ["mittel", "hoch"])
+        self.assertGreater(len(safety_scam.get("flags", [])), 0)
+
+        # Test negotiation generator
+        neg = generate_negotiation_reply(
+            title="Sony WH-1000XM4 Kopfhörer",
+            current_price=150.0,
+            description="Kopfhörer OVP",
+            target_price=120.0,
+            style="freundlich",
+            stop_condition="abbrechen wenn unter 110",
+            ai_settings={"ai_provider": "heuristic"}
+        )
+        self.assertIn("reply_text", neg)
+        self.assertTrue(len(neg["reply_text"]) > 10)
+        self.assertIn("120", neg["reply_text"])
+
+    def test_facebook_scraper_basics(self):
+        from app.facebook_scraper import build_fb_search_url, parse_fb_price
+
+        url = build_fb_search_url(
+            query="Gartenmoebel",
+            min_price=50,
+            max_price=200,
+            location_slug="berlin"
+        )
+        self.assertIn("marketplace", url)
+        self.assertIn("minPrice=50", url)
+        self.assertIn("maxPrice=200", url)
+
+        self.assertEqual(parse_fb_price("80 €"), 80.0)
+        self.assertEqual(parse_fb_price("Kostenlos"), 0.0)
+        self.assertEqual(parse_fb_price("€ 1.250"), 1250.0)
 
 if __name__ == "__main__":
     unittest.main()

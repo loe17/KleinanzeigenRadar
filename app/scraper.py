@@ -10,6 +10,8 @@ from bs4 import BeautifulSoup
 
 from app.config import DEFAULT_USER_AGENT
 from app.ocr import analyze_listing_images
+from app.facebook_scraper import scrape_facebook_marketplace
+from app.database import get_setting
 
 logger = logging.getLogger(__name__)
 
@@ -519,101 +521,80 @@ def scrape_search(
 
     all_matched = {}
     total_queries = len(search_queries)
+    platform_mode = (search.get("platform") or "both").lower()
 
-    for q_idx, query_term in enumerate(search_queries, 1):
-        parsed_items = []
-        max_pages = 2
-        for page_num in range(1, max_pages + 1):
-            url = build_search_url_for_query(
-                query=query_term,
-                min_price=search.get("min_price"),
-                max_price=search.get("max_price"),
-                postal_code=search.get("postal_code", ""),
-                radius=search.get("radius", 0),
-                page=page_num
-            )
-            logger.info(f"Suche '{search.get('name')}' - Abruf Begriff '{query_term}' (Seite {page_num}): {url}")
-            if on_progress:
-                display_q = f"'{query_term}'" if query_term else search.get("name", "Suchauftrag")
-                if total_queries > 1:
-                    on_progress(10 + int(15 * (q_idx - 1) / total_queries), f"Frage Kleinanzeigen ab ({q_idx}/{total_queries}): {display_q} (Seite {page_num})...", len(all_matched), 0)
-                else:
-                    on_progress(10, f"Frage Kleinanzeigen ab: {display_q} (Seite {page_num})...", len(all_matched), 0)
+    if platform_mode in ("kleinanzeigen", "both"):
+        for q_idx, query_term in enumerate(search_queries, 1):
+            parsed_items = []
+            max_pages = 2
+            for page_num in range(1, max_pages + 1):
+                url = build_search_url_for_query(
+                    query=query_term,
+                    min_price=search.get("min_price"),
+                    max_price=search.get("max_price"),
+                    postal_code=search.get("postal_code", ""),
+                    radius=search.get("radius", 0),
+                    page=page_num
+                )
+                logger.info(f"Suche '{search.get('name')}' - Abruf Begriff '{query_term}' (Seite {page_num}): {url}")
+                if on_progress:
+                    display_q = f"'{query_term}'" if query_term else search.get("name", "Suchauftrag")
+                    if total_queries > 1:
+                        on_progress(10 + int(15 * (q_idx - 1) / total_queries), f"Frage Kleinanzeigen ab ({q_idx}/{total_queries}): {display_q} (Seite {page_num})...", len(all_matched), 0)
+                    else:
+                        on_progress(10, f"Frage Kleinanzeigen ab: {display_q} (Seite {page_num})...", len(all_matched), 0)
 
-            try:
-                resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=12)
-                if resp.status_code != 200:
-                    logger.warning(f"Kleinanzeigen antwortete mit Status {resp.status_code} für '{query_term}' Seite {page_num}")
+                try:
+                    resp = requests.get(url, headers=DEFAULT_HEADERS, timeout=12)
+                    if resp.status_code != 200:
+                        logger.warning(f"Kleinanzeigen antwortete mit Status {resp.status_code} für '{query_term}' Seite {page_num}")
+                        break
+
+                    soup = BeautifulSoup(resp.text, "html.parser")
+                    page_items = parse_articles_from_soup(soup)
+                    logger.info(f"Gefundene Anzeigen auf Seite {page_num} für '{query_term}': {len(page_items)}")
+                    parsed_items.extend(page_items)
+                    if len(page_items) < 15:
+                        break
+                except Exception as e:
+                    logger.error(f"Fehler bei Anfrage an Kleinanzeigen für '{query_term}' Seite {page_num}: {e}")
                     break
 
-                soup = BeautifulSoup(resp.text, "html.parser")
-                page_items = parse_articles_from_soup(soup)
-                logger.info(f"Gefundene Anzeigen auf Seite {page_num} für '{query_term}': {len(page_items)}")
-                parsed_items.extend(page_items)
-                if len(page_items) < 15:
-                    break
-            except Exception as e:
-                logger.error(f"Fehler bei Anfrage an Kleinanzeigen für '{query_term}' Seite {page_num}: {e}")
-                break
-
-        total_items = len(parsed_items)
-        if on_progress:
-            on_progress(25, f"{total_items} Inserate auf Kleinanzeigen geladen. Prüfe Kriterien...", len(all_matched), total_items)
-
-        for idx, ad in enumerate(parsed_items, 1):
-            adid = ad["adid"]
-            if adid in all_matched:
-                continue
-
-            pct = 25 + int((idx / max(1, total_items)) * 70)
+            total_items = len(parsed_items)
             if on_progress:
-                on_progress(pct, f"Prüfe Inserat {idx} von {total_items}...", len(all_matched), total_items)
+                on_progress(25, f"{total_items} Inserate auf Kleinanzeigen geladen. Prüfe Kriterien...", len(all_matched), total_items)
 
-            # Preis-Filter
-            min_p = search.get("min_price")
-            max_p = search.get("max_price")
-            num_p = ad["numeric_price"]
-            if num_p is not None:
-                if min_p is not None and str(min_p).strip() != "" and num_p < float(min_p):
-                    continue
-                if max_p is not None and str(max_p).strip() != "" and num_p > float(max_p):
+            for idx, ad in enumerate(parsed_items, 1):
+                adid = ad["adid"]
+                if adid in all_matched:
                     continue
 
-            # Versand-Filter
-            shipping_pref = search.get("shipping_type", "all")
-            if shipping_pref == "shipping_only" and not ad["shipping_possible"]:
-                continue
-            if shipping_pref == "pickup_only" and ad["shipping_possible"]:
-                continue
+                pct = 25 + int((idx / max(1, total_items)) * 50)
+                if on_progress:
+                    on_progress(pct, f"Prüfe Inserat {idx} von {total_items}...", len(all_matched), total_items)
 
-            full_description = ad["description"]
-            all_images = [ad["thumbnail"]] if ad["thumbnail"] else []
-            ocr_text = ""
+                # Preis-Filter
+                min_p = search.get("min_price")
+                max_p = search.get("max_price")
+                num_p = ad["numeric_price"]
+                if num_p is not None:
+                    if min_p is not None and str(min_p).strip() != "" and num_p < float(min_p):
+                        continue
+                    if max_p is not None and str(max_p).strip() != "" and num_p > float(max_p):
+                        continue
 
-            # 1. Schnelle Vorprüfung mit den bereits vorhandenen Daten der Suchergebnisseite
-            is_match, reason = matches_keywords(
-                search_criteria=search,
-                title=ad["title"],
-                description=full_description,
-                ocr_text="",
-                matched_term=query_term
-            )
+                # Versand-Filter
+                shipping_pref = search.get("shipping_type", "all")
+                if shipping_pref == "shipping_only" and not ad["shipping_possible"]:
+                    continue
+                if shipping_pref == "pickup_only" and ad["shipping_possible"]:
+                    continue
 
-            # 2. Falls durch Ausschlusskriterium im Titel/Text verworfen -> sofort überspringen
-            if not is_match and "Ausgeschlossen" in reason:
-                continue
+                full_description = ad["description"]
+                all_images = [ad["thumbnail"]] if ad["thumbnail"] else []
+                ocr_text = ""
 
-            published_date = ad.get("published_date", "")
-
-            # 3. Falls noch kein Treffer, aber Volltextsuche gewünscht ist -> Detailseite abrufen
-            if not is_match and search.get("search_in_description") and ad["url"]:
-                detailed_desc, detailed_images, detailed_date = fetch_ad_details(ad["url"], DEFAULT_HEADERS)
-                if detailed_desc:
-                    full_description = detailed_desc
-                if detailed_images:
-                    all_images = detailed_images
-                if detailed_date:
-                    published_date = detailed_date
+                # 1. Schnelle Vorprüfung mit den bereits vorhandenen Daten der Suchergebnisseite
                 is_match, reason = matches_keywords(
                     search_criteria=search,
                     title=ad["title"],
@@ -622,49 +603,145 @@ def scrape_search(
                     matched_term=query_term
                 )
 
-            # 4. Falls immer noch kein Treffer, aber Foto-Texterkennung aktiv ist -> OCR ausführen
-            if not is_match and search.get("ocr_images") and all_images:
-                ocr_text = analyze_listing_images(all_images, max_images=3)
-                is_match, reason = matches_keywords(
-                    search_criteria=search,
-                    title=ad["title"],
-                    description=full_description,
-                    ocr_text=ocr_text,
-                    matched_term=query_term
+                # 2. Falls durch Ausschlusskriterium im Titel/Text verworfen -> sofort überspringen
+                if not is_match and "Ausgeschlossen" in reason:
+                    continue
+
+                published_date = ad.get("published_date", "")
+
+                # 3. Falls noch kein Treffer, aber Volltextsuche gewünscht ist -> Detailseite abrufen
+                if not is_match and search.get("search_in_description") and ad["url"]:
+                    detailed_desc, detailed_images, detailed_date = fetch_ad_details(ad["url"], DEFAULT_HEADERS)
+                    if detailed_desc:
+                        full_description = detailed_desc
+                    if detailed_images:
+                        all_images = detailed_images
+                    if detailed_date:
+                        published_date = detailed_date
+                    is_match, reason = matches_keywords(
+                        search_criteria=search,
+                        title=ad["title"],
+                        description=full_description,
+                        ocr_text="",
+                        matched_term=query_term
+                    )
+
+                # 4. Falls immer noch kein Treffer, aber Foto-Texterkennung aktiv ist -> OCR ausführen
+                if not is_match and search.get("ocr_images") and all_images:
+                    ocr_text = analyze_listing_images(all_images, max_images=3)
+                    is_match, reason = matches_keywords(
+                        search_criteria=search,
+                        title=ad["title"],
+                        description=full_description,
+                        ocr_text=ocr_text,
+                        matched_term=query_term
+                    )
+
+                if not is_match:
+                    continue
+
+                ad_item = {
+                    "search_id": search["id"],
+                    "kleinanzeigen_id": str(adid),
+                    "platform": "kleinanzeigen",
+                    "title": ad["title"],
+                    "price": ad["price_text"],
+                    "price_num": ad["numeric_price"],
+                    "location": ad["location"],
+                    "shipping_possible": ad["shipping_possible"],
+                    "url": ad["url"],
+                    "thumbnail_url": ad["thumbnail"] or (all_images[0] if all_images else ""),
+                    "images": all_images,
+                    "description": full_description,
+                    "ocr_text": ocr_text,
+                    "match_reason": reason,
+                    "status": "new",
+                    "search_name": search.get("name"),
+                    "published_date": published_date
+                }
+                all_matched[adid] = ad_item
+
+                # Sofort an Callback übergeben (Streaming in die Datenbank)
+                if on_ad_found:
+                    try:
+                        on_ad_found(ad_item)
+                    except Exception as e_cb:
+                        logger.warning(f"Fehler in on_ad_found Callback: {e_cb}")
+
+            if len(search_queries) > 1:
+                time.sleep(random.uniform(0.6, 1.2))
+
+    # Facebook Marketplace Suche
+    if platform_mode in ("facebook", "both"):
+        if on_progress:
+            on_progress(80, f"Durchsuche Facebook Marketplace für '{search.get('name')}'...", len(all_matched), 0)
+        fb_cookie = get_setting("facebook_session_cookie", "")
+        for q_idx, query_term in enumerate(search_queries, 1):
+            try:
+                fb_items = scrape_facebook_marketplace(
+                    query=query_term,
+                    min_price=search.get("min_price"),
+                    max_price=search.get("max_price"),
+                    postal_code=search.get("postal_code", ""),
+                    session_cookie=fb_cookie,
+                    max_items=30
                 )
+                logger.info(f"Facebook Marketplace lieferte {len(fb_items)} Inserate für '{query_term}'")
+                for fb_ad in fb_items:
+                    adid = f"fb_{fb_ad['adid']}"
+                    if adid in all_matched:
+                        continue
 
-            if not is_match:
-                continue
+                    # Preis-Filter
+                    min_p = search.get("min_price")
+                    max_p = search.get("max_price")
+                    num_p = fb_ad.get("numeric_price")
+                    if num_p is not None:
+                        if min_p is not None and str(min_p).strip() != "" and num_p < float(min_p):
+                            continue
+                        if max_p is not None and str(max_p).strip() != "" and num_p > float(max_p):
+                            continue
 
-            ad_item = {
-                "search_id": search["id"],
-                "kleinanzeigen_id": str(adid),
-                "title": ad["title"],
-                "price": ad["price_text"],
-                "price_num": ad["numeric_price"],
-                "location": ad["location"],
-                "shipping_possible": ad["shipping_possible"],
-                "url": ad["url"],
-                "thumbnail_url": ad["thumbnail"] or (all_images[0] if all_images else ""),
-                "images": all_images,
-                "description": full_description,
-                "ocr_text": ocr_text,
-                "match_reason": reason,
-                "status": "new",
-                "search_name": search.get("name"),
-                "published_date": published_date
-            }
-            all_matched[adid] = ad_item
+                    # Keyword-Filter
+                    is_match, reason = matches_keywords(
+                        search_criteria=search,
+                        title=fb_ad["title"],
+                        description=fb_ad.get("description", ""),
+                        ocr_text="",
+                        matched_term=query_term
+                    )
+                    if not is_match:
+                        continue
 
-            # Sofort an Callback übergeben (Streaming in die Datenbank)
-            if on_ad_found:
-                try:
-                    on_ad_found(ad_item)
-                except Exception as e_cb:
-                    logger.warning(f"Fehler in on_ad_found Callback: {e_cb}")
+                    all_imgs = fb_ad.get("images") or ([fb_ad["thumbnail"]] if fb_ad.get("thumbnail") else [])
+                    ad_item = {
+                        "search_id": search["id"],
+                        "kleinanzeigen_id": str(adid),
+                        "platform": "facebook",
+                        "title": fb_ad["title"],
+                        "price": fb_ad["price_text"],
+                        "price_num": fb_ad["numeric_price"],
+                        "location": fb_ad.get("location", ""),
+                        "shipping_possible": False,
+                        "url": fb_ad["url"],
+                        "thumbnail_url": fb_ad.get("thumbnail") or (all_imgs[0] if all_imgs else ""),
+                        "images": all_imgs,
+                        "description": fb_ad.get("description", ""),
+                        "ocr_text": "",
+                        "match_reason": reason,
+                        "status": "new",
+                        "search_name": search.get("name"),
+                        "published_date": ""
+                    }
+                    all_matched[adid] = ad_item
 
-        if len(search_queries) > 1:
-            time.sleep(random.uniform(0.6, 1.2))
+                    if on_ad_found:
+                        try:
+                            on_ad_found(ad_item)
+                        except Exception as e_cb:
+                            logger.warning(f"Fehler in on_ad_found Callback (Facebook): {e_cb}")
+            except Exception as efb:
+                logger.error(f"Fehler bei Facebook Marketplace Suche für '{query_term}': {efb}")
 
     if on_progress:
         on_progress(100, f"Suchlauf abgeschlossen: {len(all_matched)} Treffer gefunden.", len(all_matched), len(all_matched))
